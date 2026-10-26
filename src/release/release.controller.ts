@@ -13,7 +13,7 @@ export class ReleaseController {
   version() {
     return {
       latestVersion: this.config.getOrThrow<string>('LATEST_VERSION'),
-      description: 'Perbaikan bug dan peningkatan sensitivitas scan.',
+      description: this.config.getOrThrow<string>('DESC'),
       url: `${this.config.getOrThrow<string>('DOWNLOAD_URL')}`,
     };
   }

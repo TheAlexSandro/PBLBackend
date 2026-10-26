@@ -21,7 +21,7 @@ export class ReleaseService {
 
   async getApkDownloadUrl(): Promise<string> {
     const key = this.config.getOrThrow<string>('R2_APK_KEY');
-    const filename = key.split('/').pop() ?? 'app.apk';
+    const filename = `${key}-v${this.config.getOrThrow<string>('LATEST_VERSION')}.apk`;
 
     const command = new GetObjectCommand({
       Bucket: this.config.getOrThrow<string>('R2_BUCKET'),

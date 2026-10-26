@@ -5,7 +5,7 @@ primary_region = 'sin'
 
 [deploy]
   strategy = 'immediate'
-  release_command = "npx prisma migrate deploy"
+  #release_command = "npx prisma migrate deploy"
 
 [env]
   PORT = '3000'
@@ -16,7 +16,7 @@ primary_region = 'sin'
   auto_stop_machines = false
   auto_start_machines = false
   min_machines_running = 1
-  checks = [{ grace_period = '10s', interval = '30s', method = 'GET', path = '/ping', timeout = '5s' }]
+  checks = [{ grace_period = '10s', interval = '30s', method = 'GET', path = '/', timeout = '5s' }]
 
 [[restart]]
   policy = 'always'

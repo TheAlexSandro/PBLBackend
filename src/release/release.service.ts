@@ -25,7 +25,7 @@ export class ReleaseService {
 
     const command = new GetObjectCommand({
       Bucket: this.config.getOrThrow<string>('R2_BUCKET'),
-      Key: key,
+      Key: filename,
       ResponseContentType: 'application/vnd.android.package-archive',
       ResponseContentDisposition: `attachment; filename="${filename}"`,
     });

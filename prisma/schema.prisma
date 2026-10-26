@@ -1,0 +1,39 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ScanResult {
+  VALID
+  ALREADY_SCANNED
+  NOT_FOUND
+}
+
+model Ticket {
+  id        String    @id
+  nama      String
+  kelas     String
+  scanned   Boolean   @default(false)
+  scannedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  logs      ScanLog[]
+
+  @@index([scanned])
+}
+
+model ScanLog {
+  id        Int        @id @default(autoincrement())
+  code      String
+  ticketId  String?
+  result    ScanResult
+  createdAt DateTime   @default(now())
+  ticket    Ticket?    @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+}

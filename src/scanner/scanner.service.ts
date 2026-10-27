@@ -15,6 +15,11 @@ export interface ScanResponse {
   scannedAt?: Date | null;
 }
 
+export interface SyncResult {
+  total: number;
+  created: number;
+}
+
 const SYNC_COOLDOWN_MS = 30_000;
 const CHUNK = 500;
 
@@ -22,7 +27,7 @@ const CHUNK = 500;
 export class ScannerService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ScannerService.name);
   private lastSync = 0;
-  private syncing: Promise<number> | null = null;
+  private syncing: Promise<SyncResult> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -31,8 +36,8 @@ export class ScannerService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     try {
-      const n = await this.syncFromSheet(true);
-      this.logger.log(`Sync awal: ${n} tiket`);
+      const r = await this.syncFromSheet(true);
+      this.logger.log(`Sync awal: ${r.total} tiket (${r.created} baru)`);
     } catch (e) {
       this.logger.error('Sync awal gagal', e as Error);
     }
@@ -94,9 +99,11 @@ export class ScannerService implements OnApplicationBootstrap {
     };
   }
 
-  async syncFromSheet(force = false): Promise<number> {
+  async syncFromSheet(force = false): Promise<SyncResult> {
     if (this.syncing) return this.syncing;
-    if (!force && Date.now() - this.lastSync < SYNC_COOLDOWN_MS) return 0;
+    if (!force && Date.now() - this.lastSync < SYNC_COOLDOWN_MS) {
+      return { total: 0, created: 0 };
+    }
 
     this.syncing = this.doSync().finally(() => {
       this.syncing = null;
@@ -104,9 +111,11 @@ export class ScannerService implements OnApplicationBootstrap {
     return this.syncing;
   }
 
-  private async doSync(): Promise<number> {
+  private async doSync(): Promise<SyncResult> {
     const fetched = await this.sheets.fetchTickets();
     const rows = [...new Map(fetched.map((r) => [r.id, r])).values()];
+
+    const before = await this.prisma.ticket.count();
 
     for (let i = 0; i < rows.length; i += CHUNK) {
       const chunk = rows.slice(i, i + CHUNK);
@@ -126,7 +135,8 @@ export class ScannerService implements OnApplicationBootstrap {
     `;
     }
 
+    const after = await this.prisma.ticket.count();
     this.lastSync = Date.now();
-    return rows.length;
+    return { total: rows.length, created: after - before };
   }
 }

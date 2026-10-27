@@ -17,6 +17,11 @@ export class ScannerController {
   @Post('sync')
   @HttpCode(200)
   async sync() {
-    return { synced: await this.scanner.syncFromSheet(true) };
+    try {
+      const { total, created } = await this.scanner.syncFromSheet(true);
+      return { total, created };
+    } catch {
+      return { error: true };
+    }
   }
 }

@@ -3,6 +3,7 @@ import {
   Logger,
   OnApplicationBootstrap,
   ServiceUnavailableException,
+  BadRequestException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SheetsService } from './sheets.service.js';
@@ -138,5 +139,37 @@ export class ScannerService implements OnApplicationBootstrap {
     const after = await this.prisma.ticket.count();
     this.lastSync = Date.now();
     return { total: rows.length, created: after - before };
+  }
+
+  async stats(year?: number) {
+    if (year !== undefined) {
+      if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+        throw new BadRequestException('Tahun tidak valid');
+      }
+
+      const from = new Date(`${year}-01-01T00:00:00+07:00`);
+      const to = new Date(`${year + 1}-01-01T00:00:00+07:00`);
+
+      const scanned = await this.prisma.ticket.count({
+        where: { scanned: true, scannedAt: { gte: from, lt: to } },
+      });
+      return { year, scanned };
+    }
+
+    const [total, scanned, perYear] = await Promise.all([
+      this.prisma.ticket.count(),
+      this.prisma.ticket.count({ where: { scanned: true } }),
+      this.prisma.$queryRaw<{ year: number; scanned: number }[]>`
+      SELECT
+        EXTRACT(YEAR FROM ("scannedAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta'))::int AS year,
+        COUNT(*)::int AS scanned
+      FROM "Ticket"
+      WHERE "scanned" = true AND "scannedAt" IS NOT NULL
+      GROUP BY 1
+      ORDER BY 1
+    `,
+    ]);
+
+    return { total, scanned, notScanned: total - scanned, perYear };
   }
 }

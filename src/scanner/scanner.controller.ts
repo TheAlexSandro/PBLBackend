@@ -1,4 +1,13 @@
-import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Post,
+  UseGuards,
+  Get,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ScanDto } from './scan.dto.js';
 import { ScannerKeyGuard } from './scanner-key.guard.js';
 import { ScannerService } from './scanner.service.js';
@@ -23,5 +32,11 @@ export class ScannerController {
     } catch {
       return { error: true };
     }
+  }
+
+  @Get('stats')
+  @HttpCode(200)
+  stats(@Query('year', new ParseIntPipe({ optional: true })) year?: number) {
+    return this.scanner.stats(year);
   }
 }

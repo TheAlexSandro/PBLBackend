@@ -37,3 +37,8 @@ model ScanLog {
 
   @@index([ticketId])
 }
+
+model Config {
+  id     String  @id
+  status Boolean
+}

@@ -35,8 +35,22 @@ export class ScannerController {
   }
 
   @Get('stats')
-  @HttpCode(200)
   stats(@Query('year', new ParseIntPipe({ optional: true })) year?: number) {
     return this.scanner.stats(year);
+  }
+
+  @Post('clearLog')
+  clearLog() {
+    return this.scanner.clearLog();
+  }
+
+  @Get('scannerStatus')
+  getStatus() {
+    return this.scanner.getStatus();
+  }
+
+  @Post('changeStatus')
+  changeStatus(@Query('code') code: string) {
+    return this.scanner.changeStatus(code);
   }
 }

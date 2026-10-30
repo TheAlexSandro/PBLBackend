@@ -59,6 +59,48 @@ export class ScannerService implements OnApplicationBootstrap {
     }
   }
 
+  async getStatus() {
+    try {
+      const getCfg = this.prisma.config;
+      return {
+        ok: true,
+        isScannerReady: (
+          await getCfg.findFirst({ where: { id: 'SCANNER_STATUS' } })
+        )?.status,
+      };
+    } catch {
+      return { ok: false, error: true };
+    }
+  }
+
+  async changeStatus(code: string) {
+    try {
+      const getCfg = this.prisma.config;
+      const stt = (await getCfg.findFirst({ where: { id: code } }))?.status;
+      if (stt === false || stt === true) {
+        await getCfg.update({
+          where: { id: code },
+          data: { status: !stt },
+        });
+
+        return { ok: true, code, status: !stt };
+      } else {
+        return { ok: false, error: 'NOT_FOUND' };
+      }
+    } catch {
+      return { ok: false, error: true };
+    }
+  }
+
+  async clearLog() {
+    try {
+      await this.prisma.scanLog.deleteMany();
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  }
+
   async scan(rawCode: string): Promise<ScanResponse> {
     const code = rawCode.trim();
 
@@ -169,7 +211,7 @@ export class ScannerService implements OnApplicationBootstrap {
       return {
         status: 'valid',
         valid: true,
-        message: 'Tiket valid',
+        message: 'Tiket Valid',
         ticket: info,
       };
     }

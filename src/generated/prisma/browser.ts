@@ -27,3 +27,8 @@ export type Ticket = Prisma.TicketModel
  * 
  */
 export type ScanLog = Prisma.ScanLogModel
+/**
+ * Model Config
+ * 
+ */
+export type Config = Prisma.ConfigModel

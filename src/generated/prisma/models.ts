@@ -10,4 +10,5 @@
  */
 export type * from './models/Ticket.js'
 export type * from './models/ScanLog.js'
+export type * from './models/Config.js'
 export type * from './commonInputTypes.js'

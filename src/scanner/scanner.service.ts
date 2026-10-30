@@ -63,8 +63,6 @@ export class ScannerService implements OnApplicationBootstrap {
     const code = rawCode.trim();
 
     let found = await this.resolve(code);
-
-    // Belum ketemu: ambil ulang dari spreadsheet (dibatasi cooldown), lalu coba lagi
     if (found.kind === 'none') {
       try {
         await this.syncFromSheet();
@@ -102,7 +100,6 @@ export class ScannerService implements OnApplicationBootstrap {
   }
 
   private async resolve(code: string): Promise<Resolution> {
-    // 1. ID persis
     const byId = await this.prisma.ticket.findUnique({
       where: { id: code },
       select: { id: true, nama: true, kelas: true },

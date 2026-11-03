@@ -1,0 +1,17 @@
+node_modules
+dist
+tsconfig.tsbuildinfo
+.git
+.gitignore
+.env
+.env.*
+Dockerfile
+.dockerignore
+docker-compose*.yml
+coverage
+test
+*.md
+.claude
+.cursor
+.agents
+.devin

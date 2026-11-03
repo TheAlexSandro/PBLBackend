@@ -27,7 +27,7 @@ const TICKET_COLS = { id: ticket.id, nama: ticket.nama, kelas: ticket.kelas };
 const MIN_PARTIAL_LENGTH = 5;
 const SYNC_COOLDOWN_MS = 30_000;
 const CHUNK = 500;
-const NOW_UTC = sql`(now() at time zone 'utc+7')`;
+const NOW_UTC = sql`(now() at time zone 'Asia/Jakarta')`;
 
 const norm = (s: string) =>
   s

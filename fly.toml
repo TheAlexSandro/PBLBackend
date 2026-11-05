@@ -1,0 +1,30 @@
+app = "pblbackend"
+primary_region = "sin"
+
+[deploy]
+strategy = "immediate"
+
+[env]
+PORT = "3000"
+
+[http_service]
+auto_start_machines = false
+auto_stop_machines = false
+force_https = true
+internal_port = 3_000
+min_machines_running = 1
+
+  [[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  path = "/"
+  timeout = "5s"
+
+[[restart]]
+policy = "always"
+
+[[vm]]
+cpu_kind = "shared"
+memory = "512mb"
+size = "shared-cpu-2x"

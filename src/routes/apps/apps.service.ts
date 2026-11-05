@@ -55,27 +55,42 @@ export class AppsService {
   }
 
   download(res: Response): void {
-    const filename = `${process.env['R2_APK_KEY']}-v${process.env['LATEST_VERSION']}.apk`;
+    toCallback(
+      this.db
+        .select({
+          id: config.id,
+          value: config.value,
+        })
+        .from(config)
+        .where(eq(config.id, 'APP_VER')),
+      (err, rows) => {
+        if (err || !rows) return this.fail(res, err);
 
-    this.bucket.getSignedDownloadUrl(
-      {
-        key: filename,
-        contentType: APK_CONTENT_TYPE,
-        filename,
-        expiresIn: URL_EXPIRES_IN,
-      },
-      (err, url) => {
-        if (err || !url) {
-          this.logger.error(`Gagal membuat signed URL: ${err}`);
-          return Utils.response(
-            res,
-            HttpStatus.INTERNAL_SERVER_ERROR,
-            false,
-            'Gagal membuat link download',
-            'INTERNAL_SERVER_ERROR',
-          );
-        }
-        return Utils.response(res, HttpStatus.OK, true, null, null, { url });
+        const filename = `${process.env['R2_APK_KEY']}-v${rows[0]?.value}.apk`;
+
+        this.bucket.getSignedDownloadUrl(
+          {
+            key: filename,
+            contentType: APK_CONTENT_TYPE,
+            filename,
+            expiresIn: URL_EXPIRES_IN,
+          },
+          (err, url) => {
+            if (err || !url) {
+              this.logger.error(`Gagal membuat signed URL: ${err}`);
+              return Utils.response(
+                res,
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                false,
+                'Gagal membuat link download',
+                'INTERNAL_SERVER_ERROR',
+              );
+            }
+            return Utils.response(res, HttpStatus.OK, true, null, null, {
+              url,
+            });
+          },
+        );
       },
     );
   }

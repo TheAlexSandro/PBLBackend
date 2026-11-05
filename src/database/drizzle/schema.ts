@@ -6,7 +6,7 @@ export const scanResult = pgEnum("ScanResult", ['VALID', 'ALREADY_SCANNED', 'NOT
 
 export const config = pgTable("Config", {
 	id: text().primaryKey().notNull(),
-	status: boolean().notNull(),
+	value: text().notNull(),
 });
 
 export const ticket = pgTable("Ticket", {

@@ -62,14 +62,14 @@ export class TicketsService implements OnApplicationBootstrap {
   getStatus(res: Response): void {
     toCallback(
       this.db
-        .select({ status: config.status })
+        .select({ value: config.value })
         .from(config)
         .where(eq(config.id, 'SCANNER_STATUS'))
         .limit(1),
       (err, rows) => {
         if (err || !rows) return this.fail(res, err);
         return Utils.response(res, HttpStatus.OK, true, null, null, {
-          isScannerReady: rows[0]?.status,
+          isScannerReady: rows[0]?.value === 'true',
         });
       },
     );
@@ -89,9 +89,11 @@ export class TicketsService implements OnApplicationBootstrap {
     toCallback(
       this.db
         .update(config)
-        .set({ status: sql`not ${config.status}` })
+        .set({
+          value: sql`CASE WHEN ${config.value} = 'true' THEN 'false' ELSE 'true' END`,
+        })
         .where(eq(config.id, code))
-        .returning({ status: config.status }),
+        .returning({ value: config.value }),
       (err, rows) => {
         if (err || !rows) return this.fail(res, err);
         if (rows.length === 0) {
@@ -105,7 +107,7 @@ export class TicketsService implements OnApplicationBootstrap {
         }
         return Utils.response(res, HttpStatus.OK, true, null, null, {
           code,
-          status: rows[0].status,
+          status: rows[0]?.value === 'true',
         });
       },
     );

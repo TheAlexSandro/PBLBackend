@@ -1,7 +1,12 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Inject } from '@nestjs/common';
 import type { Response } from 'express';
 import { Utils } from '../../utils/Utils';
 import { BucketService } from './bucket.service';
+import { DB } from '../../database/database.provider';
+import type { Database } from '../../database/database.provider';
+import { config } from '../../database/drizzle/schema';
+import { toCallback } from '../../types/types.dto';
+import { eq } from 'drizzle-orm';
 
 const APK_CONTENT_TYPE = 'application/vnd.android.package-archive';
 const URL_EXPIRES_IN = 3600;
@@ -10,14 +15,27 @@ const URL_EXPIRES_IN = 3600;
 export class AppsService {
   private readonly logger = new Logger(AppsService.name);
 
-  constructor(private readonly bucket: BucketService) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly bucket: BucketService,
+  ) {}
 
   version(res: Response): void {
-    return Utils.response(res, HttpStatus.OK, true, null, null, {
-      latestVersion: process.env['LATEST_VERSION']!,
-      description: process.env['DESC']!,
-      url: process.env['DOWNLOAD_URL']!,
-    });
+    toCallback(
+      this.db
+        .select({ value: config.value })
+        .from(config)
+        .where(eq(config.id, 'APP_VER'))
+        .limit(1),
+      (err, rows) => {
+        if (err || !rows) return this.fail(res, err);
+        return Utils.response(res, HttpStatus.OK, true, null, null, {
+          latestVersion: rows[0]?.value,
+          description: process.env['DESC']!,
+          url: process.env['DOWNLOAD_URL']!,
+        });
+      },
+    );
   }
 
   download(res: Response): void {
@@ -43,6 +61,17 @@ export class AppsService {
         }
         return Utils.response(res, HttpStatus.OK, true, null, null, { url });
       },
+    );
+  }
+
+  private fail(res: Response, error: string | null): void {
+    this.logger.error(error ?? 'Unknown error');
+    return Utils.response(
+      res,
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      false,
+      'Terjadi kesalahan pada server',
+      'INTERNAL_SERVER_ERROR',
     );
   }
 }

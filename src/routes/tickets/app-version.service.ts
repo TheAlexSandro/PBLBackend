@@ -16,7 +16,7 @@ export class AppVersionService {
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
-  async getMinVersion(): Promise<string> {
+  async getLatestVersion(): Promise<string> {
     const cached = this.cache;
     if (cached && Date.now() - cached.at < AppVersionService.TTL_MS) {
       return cached.value;
@@ -38,7 +38,8 @@ export class AppVersionService {
     const rows = await this.db
       .select({ value: config.value })
       .from(config)
-      .where(eq(config.id, 'APP_VER'));
+      .where(eq(config.id, 'APP_VER'))
+      .limit(1);
 
     const value = String(rows[0]?.value).trim();
 

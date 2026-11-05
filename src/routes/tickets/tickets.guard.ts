@@ -50,12 +50,13 @@ export class ScannerKeyGuard implements CanActivate {
 
   private async checkVersion(header: unknown): Promise<void> {
     const raw = typeof header === 'string' ? header.trim() : '';
+    // versi khusus spreadsheet, karena API ini juga dipakai di sana
     if (raw === '-1') return;
 
-    const minimum = await this.versions.getMinVersion();
-    if (!minimum) return;
+    const latest = await this.versions.getLatestVersion();
+    if (!latest) return;
 
-    if (isOlder(raw, minimum)) {
+    if (isOlder(raw, latest)) {
       throw new HttpException(
         'Versi aplikasi sudah usang. Silakan update.',
         426,

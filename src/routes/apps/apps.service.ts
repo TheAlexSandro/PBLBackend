@@ -6,7 +6,7 @@ import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
 import { config } from '../../database/drizzle/schema';
 import { toCallback } from '../../types/types.dto';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 
 const APK_CONTENT_TYPE = 'application/vnd.android.package-archive';
 const URL_EXPIRES_IN = 3600;
@@ -23,16 +23,32 @@ export class AppsService {
   version(res: Response): void {
     toCallback(
       this.db
-        .select({ value: config.value })
+        .select({
+          id: config.id,
+          value: config.value,
+        })
         .from(config)
-        .where(eq(config.id, 'APP_VER'))
-        .limit(1),
+        .where(or(eq(config.id, 'APP_VER'), eq(config.id, 'APP_DESC'))),
+
       (err, rows) => {
         if (err || !rows) return this.fail(res, err);
-        return Utils.response(res, HttpStatus.OK, true, null, null, {
-          latestVersion: rows[0]?.value,
-          description: process.env['DESC']!,
-          url: process.env['DOWNLOAD_URL']!,
+
+        const version = rows.find((row) => row.id === 'APP_VER');
+        const description = rows.find((row) => row.id === 'APP_DESC');
+
+        const info = {
+          latestVersion: version?.value ?? '',
+          description: description?.value ?? '',
+          url: process.env['DOWNLOAD_URL'] ?? '',
+        };
+
+        return void res.status(HttpStatus.OK).json({
+          status_code: HttpStatus.OK,
+          ok: true,
+          error_code: null,
+          message: null,
+          result: info,
+          ...info,
         });
       },
     );

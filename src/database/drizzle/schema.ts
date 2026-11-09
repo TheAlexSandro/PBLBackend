@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, index, timestamp, foreignKey, serial, pgEnum } from "drizzle-orm/pg-core"
+import { pgTable, text, index, boolean, timestamp, foreignKey, serial, pgEnum } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const scanResult = pgEnum("ScanResult", ['VALID', 'ALREADY_SCANNED', 'NOT_FOUND'])

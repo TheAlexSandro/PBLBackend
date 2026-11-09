@@ -11,7 +11,7 @@ import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
 import { config, scanLog, ticket } from '../../database/drizzle/schema';
 import { Utils } from '../../utils/Utils';
-import { SheetsService } from './sheet.service';
+import { SheetsService } from '../../database/sheet.service';
 import {
   Callback,
   Resolution,
@@ -440,13 +440,14 @@ export class TicketsService implements OnApplicationBootstrap {
   }
 
   private doSync(cb: Callback<SyncResult>): void {
-    this.sheets.fetchTickets((err, fetched) => {
+    this.sheets.fetchTickets((err: any, fetched: any) => {
       if (err || !fetched) return cb(err, null);
 
-      const rows = [...new Map(fetched.map((r) => [r.id, r])).values()];
+      const rows = [...new Map(fetched.map((r: any) => [r.id, r])).values()];
       this.countTickets((e1, before) => {
         if (e1 || before === null) return cb(e1, null);
 
+        //@ts-ignore
         this.upsertChunks(rows, 0, (e2) => {
           if (e2) return cb(e2, null);
 

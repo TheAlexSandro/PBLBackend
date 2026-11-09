@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createPrivateKey } from 'crypto';
 import { JWT } from 'google-auth-library';
-import { Callback, SheetTicket, toCallback } from '../../types/types.dto';
+import { Callback, SheetTicket, toCallback } from '../types/types.dto';
 
 const normalizeKey = (raw: string): string =>
   raw

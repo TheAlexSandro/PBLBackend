@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable, Logger, Inject } from '@nestjs/common';
 import type { Response } from 'express';
 import { Utils } from '../../utils/Utils';
-import { BucketService } from './bucket.service';
+import { BucketService } from '../../database/bucket.service';
 import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
 import { config } from '../../database/drizzle/schema';
@@ -72,7 +72,6 @@ export class AppsService {
           {
             key: filename,
             contentType: APK_CONTENT_TYPE,
-            filename,
             expiresIn: URL_EXPIRES_IN,
           },
           (err, url) => {

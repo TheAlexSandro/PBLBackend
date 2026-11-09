@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppsController } from './apps.controller';
 import { AppsService } from './apps.service';
-import { BucketService } from './bucket.service';
+import { BucketService } from '../../database/bucket.service';
 
 @Module({
   controllers: [AppsController],

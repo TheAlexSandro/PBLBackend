@@ -12,6 +12,7 @@ import type { Database } from '../../database/database.provider';
 import { config, scanLog, ticket } from '../../database/drizzle/schema';
 import { Utils } from '../../utils/Utils';
 import { SheetsService } from '../../database/sheet.service';
+import { RealtimeService } from '../../realtime/realtime.service';
 import {
   Callback,
   Resolution,
@@ -52,6 +53,7 @@ export class TicketsService implements OnApplicationBootstrap {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly sheets: SheetsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -107,9 +109,11 @@ export class TicketsService implements OnApplicationBootstrap {
             'NOT_FOUND',
           );
         }
+        const active = rows[0]?.value === 'true';
+        this.realtime.emitScannerStatus(active);
         return Utils.response(res, HttpStatus.OK, true, null, null, {
           code,
-          status: rows[0]?.value === 'true',
+          status: active,
         });
       },
     );

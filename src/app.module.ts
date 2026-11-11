@@ -9,9 +9,18 @@ import { AppsModule } from './routes/apps/apps.module';
 import { ConfigsModule } from './routes/configs/configs.module';
 import { AuthModule } from './routes/auth/auth.module';
 import { AdminsModule } from './routes/admins/admins.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
-  imports: [DatabaseModule, TicketsModule, AppsModule, ConfigsModule, AuthModule, AdminsModule],
+  imports: [
+    DatabaseModule,
+    TicketsModule,
+    AppsModule,
+    ConfigsModule,
+    AuthModule,
+    AdminsModule,
+    RealtimeModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,

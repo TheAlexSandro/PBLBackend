@@ -41,6 +41,8 @@ const toIso = (v: Date | string | null): string | null => {
   return `${v.replace(' ', 'T')}Z`;
 };
 
+const thisYear = () => new Date().getFullYear();
+
 @Injectable()
 export class TicketsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(TicketsService.name);
@@ -167,7 +169,7 @@ export class TicketsService implements OnApplicationBootstrap {
   stats(res: Response, year?: number): void {
     if (year === undefined) return this.statsAll(res);
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    if (!Number.isInteger(year) || year < 2026 || year > thisYear()) {
       return Utils.response(
         res,
         HttpStatus.BAD_REQUEST,
@@ -196,20 +198,25 @@ export class TicketsService implements OnApplicationBootstrap {
 
     toCallback(
       this.db
-        .select({ scanned: count() })
-        .from(ticket)
-        .where(
-          and(
-            eq(ticket.scanned, true),
-            sql`${ticket.scannedAt} >= ${from}::timestamp`,
-            sql`${ticket.scannedAt} < ${to}::timestamp`,
+        .select({
+          total: count(),
+          scanned: count(
+            sql`case when ${ticket.scanned} = true
+                and ${ticket.scannedAt} >= ${from}::timestamp
+                and ${ticket.scannedAt} < ${to}::timestamp
+              then 1 end`,
           ),
-        ),
+        })
+        .from(ticket),
       (err, rows) => {
         if (err || !rows) return this.fail(res, err);
+
+        const { total, scanned } = rows[0];
         return Utils.response(res, HttpStatus.OK, true, null, null, {
           year,
-          scanned: rows[0].scanned,
+          total,
+          scanned,
+          notScanned: total - scanned,
         });
       },
     );
@@ -243,6 +250,7 @@ export class TicketsService implements OnApplicationBootstrap {
               total,
               scanned,
               notScanned: total - scanned,
+              thisYear: new Date().getFullYear(),
               perYear,
             });
           },

@@ -7,9 +7,11 @@ import { DatabaseModule } from './database/database.module';
 import { TicketsModule } from './routes/tickets/tickets.module';
 import { AppsModule } from './routes/apps/apps.module';
 import { ConfigsModule } from './routes/configs/configs.module';
+import { AuthModule } from './routes/auth/auth.module';
+import { AdminsModule } from './routes/admins/admins.module';
 
 @Module({
-  imports: [DatabaseModule, TicketsModule, AppsModule, ConfigsModule],
+  imports: [DatabaseModule, TicketsModule, AppsModule, ConfigsModule, AuthModule, AdminsModule],
   controllers: [AppController],
   providers: [
     AppService,

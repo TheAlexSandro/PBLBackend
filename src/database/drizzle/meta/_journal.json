@@ -8,6 +8,13 @@
       "when": 1793689137985,
       "tag": "0000_ancient_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794382916100,
+      "tag": "0001_equal_firelord",
+      "breakpoints": true
     }
   ]
 }

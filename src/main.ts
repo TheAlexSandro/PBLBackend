@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, urlencoded } from 'express';
+import cookieParser from 'cookie-parser';
 
 /**
  * Selamat Datang Contributor!
@@ -24,6 +25,7 @@ async function bootstrap() {
     // hanya izinkan 2 method untuk pass
     methods: ['GET', 'POST'],
   });
+  app.use(cookieParser());
   app.use(json({ limit: '5mb' }));
   app.use(urlencoded({ limit: '5mb', extended: true }));
   await app.listen(process.env.PORT ?? 3000);

@@ -99,6 +99,7 @@ export class AuthService {
       httpOnly: true,
       sameSite: process.env['COOKIE_SAMESITE'] as 'lax' | 'strict' | 'none',
       path: '/',
+      domain: String(process.env['COOKIE_DOMAIN'])
     };
   }
 

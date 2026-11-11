@@ -109,7 +109,7 @@ export class AdminService {
 
             return Utils.response(res, HttpStatus.OK, true, null, null, {
               type,
-              year: year ?? thisYear(),
+              year: year ?? null,
               page,
               limit,
               total,

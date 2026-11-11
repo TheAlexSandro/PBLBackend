@@ -250,7 +250,6 @@ export class TicketsService implements OnApplicationBootstrap {
               total,
               scanned,
               notScanned: total - scanned,
-              thisYear: new Date().getFullYear(),
               perYear,
             });
           },

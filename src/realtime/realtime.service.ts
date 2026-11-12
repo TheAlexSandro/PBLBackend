@@ -5,17 +5,23 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { eq, or } from 'drizzle-orm';
+import { and, count, eq, isNotNull, or, sql } from 'drizzle-orm';
 import type { Server } from 'socket.io';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
-import { config } from '../database/drizzle/schema';
+import { config, ticket } from '../database/drizzle/schema';
 
 export type ScannerStatusEvent = { active: boolean };
 export type AppVersionEvent = {
   latestVersion: string;
   description: string;
   url: string;
+};
+export type TicketStatsEvent = {
+  scanned: number;
+  notScanned: number;
+  total: number;
+  perYear: { year: number; scanned: number }[];
 };
 
 @Injectable()
@@ -51,6 +57,32 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async getTicketStats(): Promise<TicketStatsEvent> {
+    const yr = sql<number>`extract(year from (${ticket.scannedAt} at time zone 'UTC' at time zone 'Asia/Jakarta'))::int`;
+
+    const [[totals], perYear] = await Promise.all([
+      this.db
+        .select({
+          total: count(),
+          scanned: count(sql`case when ${ticket.scanned} then 1 end`),
+        })
+        .from(ticket),
+      this.db
+        .select({ year: yr.mapWith(Number), scanned: count() })
+        .from(ticket)
+        .where(and(eq(ticket.scanned, true), isNotNull(ticket.scannedAt)))
+        .groupBy(yr)
+        .orderBy(yr),
+    ]);
+
+    return {
+      scanned: totals.scanned,
+      notScanned: totals.total - totals.scanned,
+      total: totals.total,
+      perYear,
+    };
+  }
+
   emitScannerStatus(active: boolean): void {
     this.server?.emit('scanner:status', {
       active,
@@ -61,6 +93,18 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     this.server?.emit('app:version', info);
   }
 
+  emitTicketStats(stats: TicketStatsEvent): void {
+    this.server?.emit('ticket:stats', stats);
+  }
+
+  async broadcastTicketStats(): Promise<void> {
+    try {
+      this.emitTicketStats(await this.getTicketStats());
+    } catch (e) {
+      this.logger.warn('Gagal broadcast ticket:stats', e);
+    }
+  }
+
   async onModuleInit(): Promise<void> {
     const url = process.env['DATABASE_URL'];
     if (!url) return;
@@ -69,12 +113,19 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
       const client = new Client({ connectionString: url });
       await client.connect();
       await client.query('LISTEN config_changed');
+      await client.query('LISTEN ticket_changed');
       client.on('notification', (msg) => {
-        const id = msg.payload;
-        if (id === 'SCANNER_STATUS') {
-          void this.getScannerStatus().then((a) => this.emitScannerStatus(a));
-        } else if (id === 'APP_VER' || id === 'APP_DESC') {
-          void this.getAppVersion().then((v) => this.emitAppVersion(v));
+        if (msg.channel === 'ticket_changed') {
+          void this.broadcastTicketStats();
+          return;
+        }
+        if (msg.channel === 'config_changed') {
+          const id = msg.payload;
+          if (id === 'SCANNER_STATUS') {
+            void this.getScannerStatus().then((a) => this.emitScannerStatus(a));
+          } else if (id === 'APP_VER' || id === 'APP_DESC') {
+            void this.getAppVersion().then((v) => this.emitAppVersion(v));
+          }
         }
       });
     } catch (e) {

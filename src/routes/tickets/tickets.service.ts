@@ -311,6 +311,7 @@ export class TicketsService implements OnApplicationBootstrap {
       };
 
       if (r.claimed) {
+        void this.db.execute(sql`select pg_notify('ticket_changed', '')`);
         return Utils.response(res, HttpStatus.OK, true, 'Tiket Valid', null, {
           status: 'valid',
           valid: true,
@@ -465,6 +466,8 @@ export class TicketsService implements OnApplicationBootstrap {
           this.countTickets((e3, after) => {
             if (e3 || after === null) return cb(e3, null);
             this.lastSync = Date.now();
+            if (after !== before)
+              void this.db.execute(sql`select pg_notify('ticket_changed', '')`);
             return cb(null, { total: rows.length, created: after - before });
           });
         });

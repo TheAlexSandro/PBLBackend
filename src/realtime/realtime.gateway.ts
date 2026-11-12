@@ -48,7 +48,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       client.emit('app:version', version);
       client.emit('ticket:stats', stats);
       this.logger.log(`WS connected: ${client.id}`);
-    } catch {
+    } catch (e) {
+      this.logger.warn(
+        `WS ditolak ${client.id}: ${e instanceof Error ? e.message : e}`,
+      );
       client.disconnect(true);
     }
   }
@@ -56,6 +59,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   private async handshake(client: Socket): Promise<void> {
     const auth = client.handshake.auth ?? {};
 
+    this.logger.log(`auth keys: ${Object.keys(auth).join(',') || '(kosong)'}`);
     if (auth['scannerKey'] !== undefined) {
       this.assertKey(auth['scannerKey']);
       return;

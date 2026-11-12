@@ -62,7 +62,7 @@ export class AuthService {
               (err) => {
                 if (err) return this.fail(res, err);
 
-                res.cookie('log.sessionId', logId, {
+                res.cookie(String(process.env['COOKIE_KEY']), logId, {
                   ...this.cookieOptions(),
                   maxAge,
                 });
@@ -77,9 +77,9 @@ export class AuthService {
   }
 
   signOut(res: Response, req: Request) {
-    const sessionId = req.cookies?.['log.sessionId'];
+    const sessionId = req.cookies?.[String(process.env['COOKIE_KEY'])];
     const done = () => {
-      res.clearCookie('log.sessionId', this.cookieOptions());
+      res.clearCookie(String(process.env['COOKIE_KEY']), this.cookieOptions());
       return Utils.response(res, HttpStatus.OK, true, 'Success!');
     };
     if (!sessionId) return done();

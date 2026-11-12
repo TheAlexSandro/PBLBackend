@@ -46,14 +46,15 @@ export class AuthGuard implements CanActivate {
   }
 
   private getSessionId(req: Request): string | null {
-    if (req.cookies?.['log.sessionId']) return req.cookies['log.sessionId'];
+    if (req.cookies?.[String(process.env['COOKIE_KEY'])])
+      return req.cookies[String(process.env['COOKIE_KEY'])];
 
     const header = req.headers.cookie;
     if (!header) return null;
 
     for (const part of header.split(';')) {
       const [name, ...rest] = part.trim().split('=');
-      if (name === 'log.sessionId') {
+      if (name === String(process.env['COOKIE_KEY'])) {
         return decodeURIComponent(rest.join('='));
       }
     }

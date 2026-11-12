@@ -1,4 +1,5 @@
 import {
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -7,10 +8,12 @@ import {
 } from '@nestjs/common';
 import { and, count, eq, isNotNull, or, sql } from 'drizzle-orm';
 import type { Server } from 'socket.io';
+import type { Request, Response } from 'express';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
 import { config, ticket } from '../database/drizzle/schema';
 import { randomBytes } from 'crypto';
+import { Utils } from '../utils/Utils';
 
 export type ScannerStatusEvent = { active: boolean };
 export type AppVersionEvent = {
@@ -37,14 +40,25 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     this.server = server;
   }
 
-  issueTicket(): string {
+  issueTicket(req: Request, res: Response): void {
+    const getCookie = this.getSessionId(req);
+    if (!getCookie)
+      return Utils.response(
+        res,
+        HttpStatus.UNAUTHORIZED,
+        false,
+        'Unauthorized',
+        'UNAUTHORIZED',
+      );
     const now = Date.now();
     for (const [t, exp] of this.tickets) if (exp <= now) this.tickets.delete(t);
 
     const ticket = randomBytes(24).toString('base64url');
-    this.tickets.set(ticket, now + 30_000);
-    this.logger.log(`ticket dibuat, aktif: ${this.tickets.size}`);
-    return ticket;
+    const t = `${getCookie}-${ticket}`;
+    this.tickets.set(t, now + 30_000);
+    return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
+      ticket: t,
+    });
   }
 
   consumeTicket(ticket: unknown): boolean {
@@ -52,6 +66,22 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     const exp = this.tickets.get(ticket);
     this.tickets.delete(ticket);
     return exp !== undefined && exp > Date.now();
+  }
+
+  private getSessionId(req: Request): string | null {
+    if (req.cookies?.[String(process.env['COOKIE_KEY'])])
+      return req.cookies[String(process.env['COOKIE_KEY'])];
+
+    const header = req.headers.cookie;
+    if (!header) return null;
+
+    for (const part of header.split(';')) {
+      const [name, ...rest] = part.trim().split('=');
+      if (name === String(process.env['COOKIE_KEY'])) {
+        return decodeURIComponent(rest.join('='));
+      }
+    }
+    return null;
   }
 
   async getScannerStatus(): Promise<boolean> {

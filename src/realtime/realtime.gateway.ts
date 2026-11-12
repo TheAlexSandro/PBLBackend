@@ -18,9 +18,11 @@ import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
 import { session } from '../database/drizzle/schema';
 
+const allowedOrigin = String(process.env['ALLOWED_ORIGINS']).split(',');
+
 @WebSocketGateway({
   namespace: '/wss',
-  cors: { origin: ['http://localhost:5173'], credentials: true },
+  cors: { origin: allowedOrigin, credentials: true },
 })
 @Injectable()
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
@@ -116,7 +118,6 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   private assertOrigin(origin: string | undefined): void {
-    const allowedOrigin = String(process.env['ALLOWED_ORIGINS']).split(',');
     if (!origin || !allowedOrigin.includes(origin)) {
       throw new UnauthorizedException();
     }

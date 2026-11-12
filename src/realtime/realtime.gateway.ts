@@ -13,16 +13,12 @@ import {
 import { timingSafeEqual } from 'crypto';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeService } from './realtime.service';
-import { and, eq, gt } from 'drizzle-orm';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
-import { session } from '../database/drizzle/schema';
-
-const allowedOrigin = String(process.env['ALLOWED_ORIGINS']).split(',');
 
 @WebSocketGateway({
   namespace: '/wss',
-  cors: { origin: allowedOrigin, credentials: true },
+  cors: { origin: '*' },
 })
 @Injectable()
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
@@ -57,79 +53,32 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     }
   }
 
-  private async handshake(client: Socket) {
-    const scannerKey = client.handshake.auth?.['scannerKey'];
+  private async handshake(client: Socket): Promise<void> {
+    const auth = client.handshake.auth ?? {};
 
-    if (scannerKey) {
-      this.assertKey(scannerKey);
+    if (auth['scannerKey'] !== undefined) {
+      this.assertKey(auth['scannerKey']);
       return;
     }
 
-    this.assertOrigin(client.handshake.headers.origin);
-    const sessionId = this.getSessionId(client.handshake.headers.cookie);
-    if (!sessionId) this.reject();
-    await this.verify(sessionId);
+    if (!this.realtime.consumeTicket(auth['ticket'])) this.reject();
   }
 
-  private getSessionId(cookieHeader: string | undefined): string | null {
-    if (!cookieHeader) return null;
-
-    for (const part of cookieHeader.split(';')) {
-      const [name, ...rest] = part.trim().split('=');
-      if (name === 'log.sessionId') {
-        try {
-          return decodeURIComponent(rest.join('='));
-        } catch {
-          return null;
-        }
-      }
-    }
-    return null;
-  }
-
-  private async verify(sessionId: any) {
-    try {
-      const rows = await this.db
-        .select({ id: session.id })
-        .from(session)
-        .where(
-          and(
-            eq(session.id, sessionId!),
-            gt(session.expiredAt, new Date().toISOString()),
-          ),
-        )
-        .limit(1);
-
-      if (!rows.length) this.reject();
-      return true;
-    } catch (err) {
-      if (err instanceof UnauthorizedException) throw err;
-      this.logger.error(err instanceof Error ? err.message : String(err));
-      this.reject();
-    }
-  }
-
-  private reject(): never {
+  private reject() {
     throw new UnauthorizedException({
       status: false,
-      message: 'Belum login atau sesi sudah berakhir',
+      message: 'Unauthorized',
       code: 'UNAUTHORIZED',
     });
   }
 
-  private assertOrigin(origin: string | undefined): void {
-    if (!origin || !allowedOrigin.includes(origin)) {
-      throw new UnauthorizedException();
-    }
-  }
-
-  private assertKey(key: unknown): void {
+  private assertKey(key: any): void {
     const expected = process.env['SCANNER_KEY'] ?? '';
-    if (typeof key !== 'string') throw new UnauthorizedException();
+    if (typeof key !== 'string') this.reject();
     const a = Buffer.from(key);
     const b = Buffer.from(expected);
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new UnauthorizedException();
+      this.reject();
     }
   }
 }

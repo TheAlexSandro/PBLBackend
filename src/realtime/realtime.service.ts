@@ -10,6 +10,7 @@ import type { Server } from 'socket.io';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
 import { config, ticket } from '../database/drizzle/schema';
+import { randomBytes } from 'crypto';
 
 export type ScannerStatusEvent = { active: boolean };
 export type AppVersionEvent = {
@@ -28,11 +29,28 @@ export type TicketStatsEvent = {
 export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealtimeService.name);
   private server: Server | null = null;
+  private readonly tickets = new Map<string, number>();
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
   bind(server: Server): void {
     this.server = server;
+  }
+
+  issueTicket(): string {
+    const now = Date.now();
+    for (const [t, exp] of this.tickets) if (exp <= now) this.tickets.delete(t);
+
+    const ticket = randomBytes(24).toString('base64url');
+    this.tickets.set(ticket, now + 30_000);
+    return ticket;
+  }
+
+  consumeTicket(ticket: unknown): boolean {
+    if (typeof ticket !== 'string') return false;
+    const exp = this.tickets.get(ticket);
+    this.tickets.delete(ticket);
+    return exp !== undefined && exp > Date.now();
   }
 
   async getScannerStatus(): Promise<boolean> {

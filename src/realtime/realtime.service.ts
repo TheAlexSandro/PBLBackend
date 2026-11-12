@@ -43,6 +43,7 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
 
     const ticket = randomBytes(24).toString('base64url');
     this.tickets.set(ticket, now + 30_000);
+    this.logger.log(`ticket dibuat, aktif: ${this.tickets.size}`);
     return ticket;
   }
 

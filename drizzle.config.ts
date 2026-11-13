@@ -7,7 +7,7 @@ export default defineConfig({
   dialect: 'postgresql',
   //@ts-ignore
   dbCredentials: { url: process.env['DATABASE_URL'] },
-  tablesFilter: ['Ticket', 'ScanLog', 'Config', 'Session'],
+  tablesFilter: ['Ticket', 'ScanLog', 'Config', 'Session', 'User'],
   entities: {
     roles: { provider: 'supabase' },
   },

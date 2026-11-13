@@ -32,6 +32,7 @@ export class AuthGuard implements CanActivate {
           and(
             eq(session.id, sessionId!),
             gt(session.expiredAt, new Date().toISOString()),
+            eq(session.key, String(process.env['COOKIE_KEY'])),
           ),
         )
         .limit(1);

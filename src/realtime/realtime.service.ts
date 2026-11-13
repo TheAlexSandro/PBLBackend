@@ -8,12 +8,9 @@ import {
 } from '@nestjs/common';
 import { and, count, eq, isNotNull, or, sql } from 'drizzle-orm';
 import type { Server } from 'socket.io';
-import type { Request, Response } from 'express';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
 import { config, ticket } from '../database/drizzle/schema';
-import { randomBytes } from 'crypto';
-import { Utils } from '../utils/Utils';
 
 export type ScannerStatusEvent = { active: boolean };
 export type AppVersionEvent = {
@@ -32,56 +29,11 @@ export type TicketStatsEvent = {
 export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealtimeService.name);
   private server: Server | null = null;
-  private readonly tickets = new Map<string, number>();
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
   bind(server: Server): void {
     this.server = server;
-  }
-
-  issueTicket(req: Request, res: Response): void {
-    const getCookie = this.getSessionId(req);
-    if (!getCookie)
-      return Utils.response(
-        res,
-        HttpStatus.UNAUTHORIZED,
-        false,
-        'Unauthorized',
-        'UNAUTHORIZED',
-      );
-    const now = Date.now();
-    for (const [t, exp] of this.tickets) if (exp <= now) this.tickets.delete(t);
-
-    const ticket = randomBytes(24).toString('base64url');
-    const t = `${getCookie}-${ticket}`;
-    this.tickets.set(t, now + 30_000);
-    return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
-      ticket: t,
-    });
-  }
-
-  consumeTicket(ticket: unknown): boolean {
-    if (typeof ticket !== 'string') return false;
-    const exp = this.tickets.get(ticket);
-    this.tickets.delete(ticket);
-    return exp !== undefined && exp > Date.now();
-  }
-
-  private getSessionId(req: Request): string | null {
-    if (req.cookies?.[String(process.env['COOKIE_KEY'])])
-      return req.cookies[String(process.env['COOKIE_KEY'])];
-
-    const header = req.headers.cookie;
-    if (!header) return null;
-
-    for (const part of header.split(';')) {
-      const [name, ...rest] = part.trim().split('=');
-      if (name === String(process.env['COOKIE_KEY'])) {
-        return decodeURIComponent(rest.join('='));
-      }
-    }
-    return null;
   }
 
   async getScannerStatus(): Promise<boolean> {
@@ -146,6 +98,10 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     this.server?.emit('ticket:stats', stats);
   }
 
+  emitRefreshLogs(): void {
+    this.server?.emit('ticket:refreshLogs', true);
+  }
+
   async broadcastTicketStats(): Promise<void> {
     try {
       this.emitTicketStats(await this.getTicketStats());
@@ -158,11 +114,13 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     const url = process.env['DATABASE_URL'];
     if (!url) return;
     try {
+      
       const { Client } = await import('pg');
       const client = new Client({ connectionString: url });
       await client.connect();
       await client.query('LISTEN config_changed');
       await client.query('LISTEN ticket_changed');
+      await client.query('LISTEN scan_log_changed');
       client.on('notification', (msg) => {
         if (msg.channel === 'ticket_changed') {
           void this.broadcastTicketStats();
@@ -172,9 +130,12 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
           const id = msg.payload;
           if (id === 'SCANNER_STATUS') {
             void this.getScannerStatus().then((a) => this.emitScannerStatus(a));
-          } else if (id === 'APP_VER' || id === 'APP_DESC') {
+          } else if (id === 'APP_VER') {
             void this.getAppVersion().then((v) => this.emitAppVersion(v));
           }
+        }
+        if (msg.channel === 'scan_log_changed') {
+          void this.emitRefreshLogs();
         }
       });
     } catch (e) {

@@ -5,7 +5,7 @@ import type { SQL } from 'drizzle-orm';
 import { Utils } from '../../utils/Utils';
 import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
-import { ticket } from '../../database/drizzle/schema';
+import { ticket, scanLog } from '../../database/drizzle/schema';
 import { toCallback } from '../../types/types.dto';
 
 const DEFAULT_LIMIT = 20;
@@ -32,8 +32,34 @@ export class AdminService {
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
-  isLoggedIn(res: Response) {
-    return Utils.response(res, HttpStatus.OK, true, 'Success!');
+  getLogs(res: Response, pageRaw?: string, limitRaw?: string) {
+    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, Number.parseInt(limitRaw ?? '', 10) || DEFAULT_LIMIT),
+    );
+
+    toCallback(this.db.select({ n: count() }).from(scanLog), (e1, c) => {
+      if (e1 || !c) return this.fail(res, e1);
+
+      toCallback(
+        this.db
+          .select()
+          .from(scanLog)
+          .orderBy(desc(scanLog.id))
+          .limit(limit)
+          .offset((page - 1) * limit),
+        (e2, rows) => {
+          if (e2 || !rows) return this.fail(res, e2);
+          return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
+            page,
+            limit,
+            total: c[0].n,
+            logs: rows,
+          });
+        },
+      );
+    });
   }
 
   getTickets(

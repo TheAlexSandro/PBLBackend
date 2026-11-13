@@ -120,10 +120,14 @@ export class TicketsService implements OnApplicationBootstrap {
   }
 
   clearLog(res: Response): void {
-    toCallback(this.db.delete(scanLog), (err) => {
-      if (err) return this.fail(res, err);
-      return Utils.response(res, HttpStatus.OK, true, 'Log berhasil dihapus');
-    });
+    toCallback(
+      this.db.execute(sql`TRUNCATE TABLE "ScanLog" RESTART IDENTITY`),
+      (err) => {
+        if (err) return this.fail(res, err);
+        void this.db.execute(sql`select pg_notify('ticket_changed', '')`);
+        return Utils.response(res, HttpStatus.OK, true, 'Log berhasil dihapus');
+      },
+    );
   }
 
   sync(res: Response): void {

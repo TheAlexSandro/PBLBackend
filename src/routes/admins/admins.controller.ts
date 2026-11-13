@@ -4,13 +4,17 @@ import { AdminService } from './admins.service';
 import { AuthGuard } from '../../filters/auth.guard';
 
 @Controller('admin')
-@UseGuards(AuthGuard)
+// @UseGuards(AuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
-  @Get('isLoggedIn')
-  isLoggedIn(@Res() res: Response): void {
-    return this.adminService.isLoggedIn(res);
+  @Get('getLogs')
+  getLogs(
+    @Res() res: Response,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): void {
+    return this.adminService.getLogs(res, page, limit);
   }
 
   @Get('getTickets')

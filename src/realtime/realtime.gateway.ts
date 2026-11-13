@@ -15,10 +15,14 @@ import type { Server, Socket } from 'socket.io';
 import { RealtimeService } from './realtime.service';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
+import { session } from '../database/drizzle/schema';
+import { and, eq, gt } from 'drizzle-orm';
+
+const allowedOrigins = String(process.env['ALLOWED_ORIGINS']).split(',');
 
 @WebSocketGateway({
   namespace: '/wss',
-  cors: { origin: '*' },
+  cors: { origin: allowedOrigins, credentials: true },
 })
 @Injectable()
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
@@ -47,6 +51,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       client.emit('scanner:status', { active });
       client.emit('app:version', version);
       client.emit('ticket:stats', stats);
+      client.emit('ticket:refreshLogs', true);
       this.logger.log(`WS connected: ${client.id}`);
     } catch (e) {
       this.logger.warn(
@@ -59,13 +64,36 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   private async handshake(client: Socket): Promise<void> {
     const auth = client.handshake.auth ?? {};
 
-    this.logger.log(`auth keys: ${Object.keys(auth).join(',') || '(kosong)'}`);
     if (auth['scannerKey'] !== undefined) {
       this.assertKey(auth['scannerKey']);
       return;
     }
 
-    if (!this.realtime.consumeTicket(auth['ticket'])) this.reject();
+    if (auth['wsAuth']) {
+      const req = client.handshake.headers.cookie;
+      await this.verifyWsToken(req);
+    }
+  }
+
+  private async verifyWsToken(req: any) {
+    const wsToken = String(req)
+      .split('; ')
+      .find((c) => c.startsWith(`${process.env['COOKIE_WS']}=`));
+    if (!wsToken) this.reject();
+
+    const rows = await this.db
+      .select({ id: session.id })
+      .from(session)
+      .where(
+        and(
+          eq(session.id, String(wsToken).split('=')[1]),
+          gt(session.expiredAt, new Date().toISOString()),
+          eq(session.key, String(process.env['COOKIE_WS'])),
+        ),
+      )
+      .limit(1);
+
+    if (!rows.length) this.reject();
   }
 
   private reject() {

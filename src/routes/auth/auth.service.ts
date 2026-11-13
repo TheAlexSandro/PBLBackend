@@ -3,9 +3,13 @@ import type { Response, Request } from 'express';
 import { Utils } from '../../utils/Utils';
 import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
-import { config, session } from '../../database/drizzle/schema';
+import { session, user } from '../../database/drizzle/schema';
 import { toCallback } from '../../types/types.dto';
-import { eq, lt } from 'drizzle-orm';
+import { eq, lt, and, gt } from 'drizzle-orm';
+
+const maxAge = Number(process.env['COOKIE_MAXAGE']);
+const now = Date.now();
+const nowIso = new Date(now).toISOString();
 
 @Injectable()
 export class AuthService {
@@ -13,7 +17,11 @@ export class AuthService {
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
-  signIn(res: Response, pwd: string) {
+  isLoggedIn(res: Response) {
+    return Utils.response(res, HttpStatus.OK, true, 'Success!');
+  }
+
+  signIn(res: Response, username: string, pwd: string) {
     if (!pwd) {
       return Utils.response(
         res,
@@ -26,27 +34,21 @@ export class AuthService {
 
     toCallback(
       this.db
-        .select({ id: config.id, value: config.value })
-        .from(config)
-        .where(eq(config.id, 'PWD')),
+        .select({ username: user.username })
+        .from(user)
+        .where(and(eq(user.username, username), eq(user.password, pwd))),
       (err, rows) => {
-        if (err || !rows || !rows.length) return this.fail(res, err);
-
-        // kata sandi tidak pernah dienkripsi di database, ini hanya untuk mempermudah :)
-        if (rows[0].value !== pwd) {
+        if (err) return this.fail(res, err);
+        if (!rows || !rows.length)
           return Utils.response(
             res,
             HttpStatus.UNAUTHORIZED,
             false,
-            'Invalid password',
-            'INVALID_PASSWORD',
+            'Username atau kata sandi tidak valid',
+            'UNAUTHORIZED',
           );
-        }
 
         const logId = Utils.generateID(100);
-        const maxAge = Number(process.env['COOKIE_MAXAGE']);
-        const now = Date.now();
-        const nowIso = new Date(now).toISOString();
 
         toCallback(
           this.db.delete(session).where(lt(session.expiredAt, nowIso)),
@@ -58,6 +60,7 @@ export class AuthService {
                 id: logId,
                 loginAt: nowIso,
                 expiredAt: new Date(now + maxAge).toISOString(),
+                key: String(process.env['COOKIE_KEY']),
               }),
               (err) => {
                 if (err) return this.fail(res, err);
@@ -93,13 +96,69 @@ export class AuthService {
     );
   }
 
+  requestConnect(res: Response, req: Request) {
+    const wsToken = req.cookies?.[String(process.env['COOKIE_WS'])];
+
+    toCallback(
+      this.db
+        .select({ id: session.id })
+        .from(session)
+        .where(
+          and(
+            eq(session.id, wsToken!),
+            gt(session.expiredAt, new Date().toISOString()),
+            eq(session.key, String(process.env['COOKIE_WS'])),
+          ),
+        )
+        .limit(1),
+      (err, ro) => {
+        if (err) return this.fail(res, err);
+        if (ro?.length) {
+          return Utils.response(
+            res,
+            HttpStatus.OK,
+            true,
+            'Already connected!',
+            null,
+            {
+              'ws.access': ro[0].id,
+            },
+          );
+        }
+        const genId = Utils.generateID(10);
+        const taId = `ws_-${genId}`;
+
+        toCallback(
+          this.db.insert(session).values({
+            id: taId,
+            loginAt: nowIso,
+            expiredAt: new Date(now + maxAge).toISOString(),
+            key: String(process.env['COOKIE_WS']),
+          }),
+          (err) => {
+            if (err) return this.fail(res, err);
+
+            res.cookie(String(process.env['COOKIE_WS']), taId, {
+              ...this.cookieOptions(),
+              maxAge,
+            });
+
+            return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
+              'ws.access': taId,
+            });
+          },
+        );
+      },
+    );
+  }
+
   private cookieOptions() {
     return {
       secure: true,
       httpOnly: true,
       sameSite: process.env['COOKIE_SAMESITE'] as 'lax' | 'strict' | 'none',
       path: '/',
-      domain: String(process.env['COOKIE_DOMAIN'])
+      //domain: String(process.env['COOKIE_DOMAIN']),
     };
   }
 

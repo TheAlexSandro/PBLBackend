@@ -5,7 +5,7 @@ import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
 import { session, user } from '../../database/drizzle/schema';
 import { toCallback } from '../../types/types.dto';
-import { eq, lt, and, gt } from 'drizzle-orm';
+import { eq, lt, and, gt, or } from 'drizzle-orm';
 
 const maxAge = Number(process.env['COOKIE_MAXAGE']);
 
@@ -84,16 +84,31 @@ export class AuthService {
   }
 
   signOut(res: Response, req: Request) {
-    const sessionId = req.cookies?.[String(process.env['COOKIE_KEY'])];
-    const wsToken = req.cookies?.[String(process.env['COOKIE_WS'])];
-    toCallback(
-      this.db
-        .delete(session)
-        .where(and(eq(session.id, sessionId), eq(session.id, wsToken))),
-      () => {
-        return Utils.response(res, HttpStatus.OK, true, 'Success!');
-      },
-    );
+    const loginKey = String(process.env['COOKIE_KEY']);
+    const wsKey = String(process.env['COOKIE_WS']);
+    const sessionId = req.cookies?.[loginKey];
+    const wsToken = req.cookies?.[wsKey];
+
+    const done = () => {
+      res.clearCookie(loginKey, this.cookieOptions());
+      res.clearCookie(wsKey, this.cookieOptions());
+      return Utils.response(res, HttpStatus.OK, true, 'Success!');
+    };
+
+    const conditions = [];
+    if (sessionId)
+      conditions.push(
+        and(eq(session.id, sessionId), eq(session.key, loginKey)),
+      );
+    if (wsToken)
+      conditions.push(and(eq(session.id, wsToken), eq(session.key, wsKey)));
+
+    if (!conditions.length) return done();
+
+    toCallback(this.db.delete(session).where(or(...conditions)), (err) => {
+      if (err) return this.fail(res, err);
+      return done();
+    });
   }
 
   requestConnect(res: Response, req: Request) {

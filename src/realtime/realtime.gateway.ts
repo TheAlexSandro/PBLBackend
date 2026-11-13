@@ -65,59 +65,35 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   private async handshake(client: Socket): Promise<void> {
     const auth = client.handshake.auth ?? {};
 
-    if (auth['scannerKey'] !== undefined) {
+    if (auth['scannerKey']) {
       this.assertKey(auth['scannerKey']);
       return;
     }
 
-    if (auth['wsAuth']) {
-      const req = client.handshake.headers.cookie;
-      await this.verifyWsToken(req);
+    if (auth['wsToken']) {
+      await this.verifyWsToken(auth['wsToken']);
+      return;
     }
 
     this.reject();
   }
 
-  private async verifyWsToken(cookieHeader: string | undefined): Promise<void> {
-    const name = String(process.env['COOKIE_WS']);
-    const token = Utils.getCookie(cookieHeader, name);
-
-    if (!cookieHeader) {
-      this.logger.warn(
-        'REASON: header Cookie kosong',
-      );
-      this.reject();
-    }
-    if (!token) {
-      this.logger.warn(`REASON: cookie "${name}" tidak ada di header`);
-      this.reject();
-    }
-
+  private async verifyWsToken(wsToken: string): Promise<void> {
     const rows = await this.db
       .select({
         id: session.id,
-        expiredAt: session.expiredAt,
-        key: session.key,
       })
       .from(session)
-      .where(eq(session.id, token!))
+      .where(
+        and(
+          eq(session.id, wsToken!),
+          gt(session.expiredAt, new Date().toISOString()),
+          eq(session.key, String(process.env['COOKIE_WS'])),
+        ),
+      )
       .limit(1);
 
-    if (!rows.length) {
-      this.logger.warn('REASON: session tidak ada di DB');
-      this.reject();
-    }
-    const row = rows[0];
-    if (row.key !== name) {
-      this.logger.warn(`REASON: key beda (db=${row.key}, env=${name})`);
-      this.reject();
-    }
-    if (new Date(row.expiredAt).getTime() <= Date.now()) {
-      this.logger.warn(
-        `REASON: expired (expiredAt=${row.expiredAt}, now=${new Date().toISOString()})`,
-      );
-      this.reject();
-    }
+    if (!rows.length) this.reject();
   }
 
   private reject() {

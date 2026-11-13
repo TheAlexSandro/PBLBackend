@@ -4,7 +4,7 @@ import { AdminService } from './admins.service';
 import { AuthGuard } from '../../filters/auth.guard';
 
 @Controller('admin')
-// @UseGuards(AuthGuard)
+@UseGuards(AuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 

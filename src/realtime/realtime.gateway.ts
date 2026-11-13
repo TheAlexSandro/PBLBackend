@@ -78,24 +78,46 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     this.reject();
   }
 
-  private async verifyWsToken(req: any) {
+  private async verifyWsToken(cookieHeader: string | undefined): Promise<void> {
     const name = String(process.env['COOKIE_WS']);
-    const wsToken = Utils.getCookie(req, name);
-    if (!wsToken) this.reject();
+    const token = Utils.getCookie(cookieHeader, name);
+
+    if (!cookieHeader) {
+      this.logger.warn(
+        'REASON: header Cookie kosong',
+      );
+      this.reject();
+    }
+    if (!token) {
+      this.logger.warn(`REASON: cookie "${name}" tidak ada di header`);
+      this.reject();
+    }
 
     const rows = await this.db
-      .select({ id: session.id })
+      .select({
+        id: session.id,
+        expiredAt: session.expiredAt,
+        key: session.key,
+      })
       .from(session)
-      .where(
-        and(
-          eq(session.id, wsToken!),
-          gt(session.expiredAt, new Date().toISOString()),
-          eq(session.key, name),
-        ),
-      )
+      .where(eq(session.id, token!))
       .limit(1);
 
-    if (!rows.length) this.reject();
+    if (!rows.length) {
+      this.logger.warn('REASON: session tidak ada di DB');
+      this.reject();
+    }
+    const row = rows[0];
+    if (row.key !== name) {
+      this.logger.warn(`REASON: key beda (db=${row.key}, env=${name})`);
+      this.reject();
+    }
+    if (new Date(row.expiredAt).getTime() <= Date.now()) {
+      this.logger.warn(
+        `REASON: expired (expiredAt=${row.expiredAt}, now=${new Date().toISOString()})`,
+      );
+      this.reject();
+    }
   }
 
   private reject() {

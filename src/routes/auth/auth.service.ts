@@ -86,20 +86,12 @@ export class AuthService {
   signOut(res: Response, req: Request) {
     const sessionId = req.cookies?.[String(process.env['COOKIE_KEY'])];
     const wsToken = req.cookies?.[String(process.env['COOKIE_WS'])];
-    const done = () => {
-      res.clearCookie(String(process.env['COOKIE_KEY']), this.cookieOptions());
-      res.clearCookie(String(process.env['COOKIE_WS']), this.cookieOptions());
-      return Utils.response(res, HttpStatus.OK, true, 'Success!');
-    };
-    if (!sessionId || !wsToken) return done();
-
     toCallback(
       this.db
         .delete(session)
         .where(and(eq(session.id, sessionId), eq(session.id, wsToken))),
-      (err) => {
-        if (err) return this.fail(res, err);
-        return done();
+      () => {
+        return Utils.response(res, HttpStatus.OK, true, 'Success!');
       },
     );
   }

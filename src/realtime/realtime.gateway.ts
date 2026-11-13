@@ -17,6 +17,7 @@ import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
 import { session } from '../database/drizzle/schema';
 import { and, eq, gt } from 'drizzle-orm';
+import { Utils } from '../utils/Utils';
 
 const allowedOrigins = String(process.env['ALLOWED_ORIGINS']).split(',');
 
@@ -73,12 +74,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       const req = client.handshake.headers.cookie;
       await this.verifyWsToken(req);
     }
+
+    this.reject();
   }
 
   private async verifyWsToken(req: any) {
-    const wsToken = String(req)
-      .split('; ')
-      .find((c) => c.startsWith(`${process.env['COOKIE_WS']}=`));
+    const name = String(process.env['COOKIE_WS']);
+    const wsToken = Utils.getCookie(req, name);
     if (!wsToken) this.reject();
 
     const rows = await this.db
@@ -86,9 +88,9 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       .from(session)
       .where(
         and(
-          eq(session.id, String(wsToken).split('=')[1]),
+          eq(session.id, wsToken!),
           gt(session.expiredAt, new Date().toISOString()),
-          eq(session.key, String(process.env['COOKIE_WS'])),
+          eq(session.key, name),
         ),
       )
       .limit(1);

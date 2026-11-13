@@ -66,7 +66,11 @@ export class AuthService {
                 if (err) return this.fail(res, err);
 
                 res.cookie(String(process.env['COOKIE_KEY']), logId, {
-                  ...this.cookieOptions(),
+                  ...this.cookieOptions(
+                    String(process.env['COOKIE_SAMESITE']) as
+                      'lax' | 'strict' | 'none',
+                    true,
+                  ),
                   maxAge,
                 });
 
@@ -154,13 +158,16 @@ export class AuthService {
     );
   }
 
-  private cookieOptions() {
+  private cookieOptions(
+    sameSite?: 'lax' | 'strict' | 'none',
+    useDomain?: boolean,
+  ) {
     return {
       secure: true,
       httpOnly: true,
-      sameSite: process.env['COOKIE_SAMESITE'] as 'lax' | 'strict' | 'none',
+      sameSite: sameSite ?? 'none',
       path: '/',
-      //domain: String(process.env['COOKIE_DOMAIN']),
+      ...(useDomain ? { domain: String(process.env['COOKIE_DOMAIN']) } : {}),
     };
   }
 

@@ -8,8 +8,6 @@ import { toCallback } from '../../types/types.dto';
 import { eq, lt, and, gt } from 'drizzle-orm';
 
 const maxAge = Number(process.env['COOKIE_MAXAGE']);
-const now = Date.now();
-const nowIso = new Date(now).toISOString();
 
 @Injectable()
 export class AuthService {
@@ -49,6 +47,8 @@ export class AuthService {
           );
 
         const logId = Utils.generateID(100);
+        const now = Date.now();
+        const nowIso = new Date(now).toISOString();
 
         toCallback(
           this.db.delete(session).where(lt(session.expiredAt, nowIso)),
@@ -127,6 +127,8 @@ export class AuthService {
         }
         const genId = Utils.generateID(10);
         const taId = `ws_-${genId}`;
+        const now = Date.now();
+        const nowIso = new Date(now).toISOString();
 
         toCallback(
           this.db.insert(session).values({

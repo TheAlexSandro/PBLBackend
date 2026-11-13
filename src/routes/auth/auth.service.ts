@@ -69,7 +69,7 @@ export class AuthService {
                   ...this.cookieOptions(
                     String(process.env['COOKIE_SAMESITE']) as
                       'lax' | 'strict' | 'none',
-                    true,
+                    String(process.env['ENV']) !== 'dev',
                   ),
                   maxAge,
                 });

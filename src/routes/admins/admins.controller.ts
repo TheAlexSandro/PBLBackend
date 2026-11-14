@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards, Post } from '@nestjs/common';
 import type { Response } from 'express';
 import { AdminService } from './admins.service';
 import { AuthGuard } from '../../filters/auth.guard';
@@ -7,6 +7,16 @@ import { AuthGuard } from '../../filters/auth.guard';
 @UseGuards(AuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  @Post('makeFinal')
+  makeFinal(@Res() res: Response): void {
+    return this.adminService.makeFinal(res);
+  }
+
+  @Get('getInfo')
+  getInfo(@Res() res: Response): void {
+    return this.adminService.getInfo(res);
+  }
 
   @Get('getLogs')
   getLogs(

@@ -19,6 +19,12 @@ import { AuthOrScannerKeyGuard } from '../../filters/authorkey.guard';
 export class TicketsController {
   constructor(private readonly tickets: TicketsService) {}
 
+  @Post('deleteTicket')
+  @UseGuards(AuthGuard)
+  deleteTicket(@Res() res: Response, @Query('id') id: string): void {
+    return this.tickets.deleteTicket(res, id);
+  }
+
   @Post('scan')
   @UseGuards(ScannerKeyGuard)
   scan(@Res() res: Response, @Body() dto: ScanDto): void {

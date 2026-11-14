@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, index, foreignKey, serial, boolean, pgEnum } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, index, boolean, foreignKey, serial, pgEnum } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const scanResult = pgEnum("ScanResult", ['VALID', 'ALREADY_SCANNED', 'NOT_FOUND'])
@@ -15,21 +15,6 @@ export const session = pgTable("Session", {
 	expiredAt: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
 	key: text(),
 });
-
-export const scanLog = pgTable("ScanLog", {
-	id: serial().primaryKey().notNull(),
-	code: text().notNull(),
-	ticketId: text(),
-	result: scanResult().notNull(),
-	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-}, (table) => [
-	index("ScanLog_ticketId_idx").using("btree", table.ticketId.asc().nullsLast().op("text_ops")),
-	foreignKey({
-			columns: [table.ticketId],
-			foreignColumns: [ticket.id],
-			name: "ScanLog_ticketId_fkey"
-		}).onUpdate("cascade").onDelete("set null"),
-]);
 
 export const ticket = pgTable("Ticket", {
 	id: text().primaryKey().notNull(),
@@ -48,3 +33,18 @@ export const user = pgTable("User", {
 	username: text().primaryKey().notNull(),
 	password: text(),
 });
+
+export const scanLog = pgTable("ScanLog", {
+	id: serial().primaryKey().notNull(),
+	code: text().notNull(),
+	ticketId: text(),
+	result: scanResult().notNull(),
+	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	index("ScanLog_ticketId_idx").using("btree", table.ticketId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.ticketId],
+			foreignColumns: [ticket.id],
+			name: "ScanLog_ticketId_fkey"
+		}).onUpdate("cascade").onDelete("set null"),
+]);

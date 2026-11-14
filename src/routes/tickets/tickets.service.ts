@@ -130,6 +130,71 @@ export class TicketsService implements OnApplicationBootstrap {
     );
   }
 
+  private isFinal(cb: Callback<boolean>): void {
+    toCallback(
+      this.db
+        .select({ value: config.value })
+        .from(config)
+        .where(eq(config.id, 'IS_FINAL'))
+        .limit(1),
+      (err, rows) => {
+        if (err || !rows) return cb(err, null);
+        return cb(null, rows[0]?.value === 'true');
+      },
+    );
+  }
+
+  deleteTicket(res: Response, id: string): void {
+    if (!id) {
+      return Utils.response(
+        res,
+        HttpStatus.BAD_REQUEST,
+        false,
+        'Parameter id wajib diisi',
+        'BAD_REQUEST',
+      );
+    }
+
+    this.isFinal((err, final) => {
+      if (err || final === null) return this.fail(res, err);
+      if (final) {
+        return Utils.response(
+          res,
+          HttpStatus.FORBIDDEN,
+          false,
+          'Tiket sudah difinalkan, tidak bisa dihapus',
+          'FORBIDDEN',
+        );
+      }
+
+      toCallback(
+        this.db
+          .delete(ticket)
+          .where(and(eq(ticket.id, id), eq(ticket.scanned, false)))
+          .returning({ id: ticket.id }),
+        (err2, rows) => {
+          if (err2 || !rows) return this.fail(res, err2);
+          if (rows.length === 0) {
+            return Utils.response(
+              res,
+              HttpStatus.NOT_FOUND,
+              false,
+              'Tiket tidak ditemukan atau sudah terpindai',
+              'NOT_FOUND',
+            );
+          }
+          void this.db.execute(sql`select pg_notify('ticket_changed', '')`);
+          return Utils.response(
+            res,
+            HttpStatus.OK,
+            true,
+            'Tiket berhasil dihapus',
+          );
+        },
+      );
+    });
+  }
+
   sync(res: Response): void {
     this.syncFromSheet(true, (err, r) => {
       if (err || !r) {
@@ -314,6 +379,17 @@ export class TicketsService implements OnApplicationBootstrap {
         kelas: r.current.kelas,
       };
 
+      if (!r.final && !r.current.scanned) {
+        return Utils.response(
+          res,
+          HttpStatus.OK,
+          true,
+          'Tiket Valid',
+          null,
+          { status: 'valid', valid: true, final: false, ticket: info },
+        );
+      }
+
       if (r.claimed) {
         void this.db.execute(sql`select pg_notify('ticket_changed', '')`);
         return Utils.response(res, HttpStatus.OK, true, 'Tiket Valid', null, {
@@ -394,13 +470,31 @@ export class TicketsService implements OnApplicationBootstrap {
     return { kind: 'none' };
   }
 
+  private peek(
+    t: TicketRow,
+    cb: Callback<{ claimed: boolean; final: boolean; current: TicketFull }>,
+  ): void {
+    toCallback(
+      this.db.select().from(ticket).where(eq(ticket.id, t.id)).limit(1),
+      (err, rows) => {
+        if (err || !rows) return cb(err, null);
+        if (!rows[0]) return cb('Tiket tidak ditemukan', null);
+        return cb(null, { claimed: false, final: false, current: rows[0] });
+      },
+    );
+  }
+
   private claim(
     t: TicketRow,
     code: string,
-    cb: Callback<{ claimed: boolean; current: TicketFull }>,
+    cb: Callback<{ claimed: boolean; final: boolean; current: TicketFull }>,
   ): void {
-    toCallback(
-      this.db.execute<{ result: ScanLogResult }>(sql`
+    this.isFinal((errF, final) => {
+      if (errF || final === null) return cb(errF, null);
+      if (!final) return this.peek(t, cb);
+
+      toCallback(
+        this.db.execute<{ result: ScanLogResult }>(sql`
         WITH upd AS (
           UPDATE "Ticket"
           SET "scanned" = true, "scannedAt" = (now() at time zone 'utc')
@@ -412,21 +506,22 @@ export class TicketsService implements OnApplicationBootstrap {
                (CASE WHEN EXISTS (SELECT 1 FROM upd) THEN 'VALID' ELSE 'ALREADY_SCANNED' END)::"ScanResult"
         RETURNING "result"
       `),
-      (err, out) => {
-        if (err || !out) return cb(err, null);
-        const claimed = out.rows[0]?.result === 'VALID';
+        (err, out) => {
+          if (err || !out) return cb(err, null);
+          const claimed = out.rows[0]?.result === 'VALID';
 
-        toCallback(
-          this.db.select().from(ticket).where(eq(ticket.id, t.id)).limit(1),
-          (err2, rows) => {
-            if (err2 || !rows) return cb(err2, null);
-            if (!rows[0])
-              return cb('Tiket tidak ditemukan setelah klaim', null);
-            return cb(null, { claimed, current: rows[0] });
-          },
-        );
-      },
-    );
+          toCallback(
+            this.db.select().from(ticket).where(eq(ticket.id, t.id)).limit(1),
+            (err2, rows) => {
+              if (err2 || !rows) return cb(err2, null);
+              if (!rows[0])
+                return cb('Tiket tidak ditemukan setelah klaim', null);
+              return cb(null, { claimed, final: true, current: rows[0] });
+            },
+          );
+        },
+      );
+    });
   }
 
   private log(

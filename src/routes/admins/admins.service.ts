@@ -5,7 +5,7 @@ import type { SQL } from 'drizzle-orm';
 import { Utils } from '../../utils/Utils';
 import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
-import { ticket, scanLog } from '../../database/drizzle/schema';
+import { ticket, scanLog, config } from '../../database/drizzle/schema';
 import { toCallback } from '../../types/types.dto';
 
 const DEFAULT_LIMIT = 20;
@@ -31,6 +31,48 @@ export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
   constructor(@Inject(DB) private readonly db: Database) {}
+
+  makeFinal(res: Response) {
+    toCallback(
+      this.db
+        .insert(config)
+        .values({ id: 'IS_FINAL', value: 'true' })
+        .onConflictDoUpdate({
+          target: config.id,
+          set: { value: 'true' },
+        })
+        .returning({ value: config.value }),
+      (err, rows) => {
+        if (err || !rows?.length) return this.fail(res, err);
+        return Utils.response(
+          res,
+          HttpStatus.OK,
+          true,
+          'Tiket sudah difinalkan',
+          null,
+          {
+            isFinal: rows[0].value === 'true',
+          },
+        );
+      },
+    );
+  }
+
+  getInfo(res: Response) {
+    toCallback(
+      this.db
+        .select({ id: config.id, value: config.value })
+        .from(config)
+        .where(eq(config.id, 'IS_FINAL')),
+      (err, rows) => {
+        if (err || !rows?.length) return this.fail(res, err);
+        const isFinal = rows[0].value === 'true' ? true : false;
+        return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
+          isFinal,
+        });
+      },
+    );
+  }
 
   getLogs(res: Response, pageRaw?: string, limitRaw?: string) {
     const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);

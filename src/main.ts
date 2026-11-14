@@ -21,7 +21,7 @@ async function bootstrap() {
     // izinkan semua origin untuk pass, backend dipakai tidak hanya untuk frontend tetapi juga spreadsheet tiket
     origin: '*',
     // izinkan 2 headers untuk pass
-    allowedHeaders: ['Content-Type', 'X-Scanner-Key'],
+    allowedHeaders: ['Content-Type', 'X-Scanner-Key', 'X-App-Version'],
     // hanya izinkan 2 method untuk pass
     methods: ['GET', 'POST'],
   });

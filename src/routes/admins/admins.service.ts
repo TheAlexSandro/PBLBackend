@@ -49,37 +49,55 @@ export class AdminService {
 
   makeFinal(res: Response) {
     toCallback(
-      this.db
-        .select({ id: config.id, value: config.value })
-        .from(config)
-        .where(eq(config.id, 'IS_FINAL')),
-      (err, rows) => {
-        if (err || !rows?.length) return this.fail(res, err);
-        const isFinal = String(rows[0].value);
-        const value =
-          isFinal === '-'
-            ? Utils.getThisYear()
-            : `${isFinal},${Utils.getThisYear()}`;
+      this.db.select({ total: count() }).from(ticket),
+      (err, totals) => {
+        if (err || !totals) return this.fail(res, err);
+
+        const total = totals[0].total;
+        if (total <= 0) {
+          return Utils.response(
+            res,
+            HttpStatus.NOT_FOUND,
+            false,
+            'Tidak ada tiket untuk ditinjau.',
+            'TICKET_EMPTY',
+          );
+        }
 
         toCallback(
           this.db
-            .insert(config)
-            .values({ id: 'IS_FINAL', value })
-            .onConflictDoUpdate({
-              target: config.id,
-              set: { value },
-            })
-            .returning({ value: config.value }),
+            .select({ id: config.id, value: config.value })
+            .from(config)
+            .where(eq(config.id, 'IS_FINAL')),
           (err, rows) => {
             if (err || !rows?.length) return this.fail(res, err);
-            return Utils.response(
-              res,
-              HttpStatus.OK,
-              true,
-              'Tiket sudah difinalkan',
-              null,
-              {
-                isFinal: rows[0].value === 'true',
+            const isFinal = String(rows[0].value);
+            const value =
+              isFinal === '-'
+                ? Utils.getThisYear()
+                : `${isFinal},${Utils.getThisYear()}`;
+
+            toCallback(
+              this.db
+                .insert(config)
+                .values({ id: 'IS_FINAL', value })
+                .onConflictDoUpdate({
+                  target: config.id,
+                  set: { value },
+                })
+                .returning({ value: config.value }),
+              (err, rows) => {
+                if (err || !rows?.length) return this.fail(res, err);
+                return Utils.response(
+                  res,
+                  HttpStatus.OK,
+                  true,
+                  'Tiket sudah difinalkan',
+                  null,
+                  {
+                    isFinal: rows[0].value === 'true',
+                  },
+                );
               },
             );
           },

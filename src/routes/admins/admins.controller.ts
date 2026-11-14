@@ -4,11 +4,11 @@ import { AdminService } from './admins.service';
 import { AuthGuard } from '../../filters/auth.guard';
 
 @Controller('admin')
-@UseGuards(AuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Post('makeFinal')
+  @UseGuards(AuthGuard)
   makeFinal(@Res() res: Response): void {
     return this.adminService.makeFinal(res);
   }
@@ -19,6 +19,7 @@ export class AdminController {
   }
 
   @Get('getLogs')
+  @UseGuards(AuthGuard)
   getLogs(
     @Res() res: Response,
     @Query('page') page?: string,
@@ -28,6 +29,7 @@ export class AdminController {
   }
 
   @Get('getTickets')
+  @UseGuards(AuthGuard)
   getTickets(
     @Res() res: Response,
     @Query('type') type?: string,
@@ -39,6 +41,7 @@ export class AdminController {
   }
 
   @Get('searchTickets')
+  @UseGuards(AuthGuard)
   searchTickets(
     @Res() res: Response,
     @Query('q') q?: string,

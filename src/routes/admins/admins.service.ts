@@ -6,7 +6,7 @@ import { Utils } from '../../utils/Utils';
 import { DB } from '../../database/database.provider';
 import type { Database } from '../../database/database.provider';
 import { ticket, scanLog, config } from '../../database/drizzle/schema';
-import { toCallback } from '../../types/types.dto';
+import { toCallback, Callback } from '../../types/types.dto';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -31,6 +31,21 @@ export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
   constructor(@Inject(DB) private readonly db: Database) {}
+
+  private isFinal(cb: Callback<boolean>): void {
+    toCallback(
+      this.db
+        .select({ value: config.value })
+        .from(config)
+        .where(eq(config.id, 'IS_FINAL'))
+        .limit(1),
+      (err, rows) => {
+        if (err || !rows) return cb(err, null);
+        const isFinal = Utils.isFinalYear(rows[0].value, Utils.getThisYear());
+        return cb(null, isFinal);
+      },
+    );
+  }
 
   makeFinal(res: Response) {
     toCallback(
@@ -74,19 +89,12 @@ export class AdminService {
   }
 
   getInfo(res: Response) {
-    toCallback(
-      this.db
-        .select({ value: config.value })
-        .from(config)
-        .where(eq(config.id, 'IS_FINAL')),
-      (err, rows) => {
-        if (err || !rows?.length) return this.fail(res, err);
-        const isFinal = Utils.isFinalYear(rows[0].value, Utils.getThisYear());
-        return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
-          isFinal,
-        });
-      },
-    );
+    this.isFinal((err, final) => {
+      if (err || final === null) return this.fail(res, err);
+      return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
+        isFinal: final,
+      });
+    });
   }
 
   getLogs(res: Response, pageRaw?: string, limitRaw?: string) {
@@ -172,40 +180,53 @@ export class AdminService {
 
     const where = conditions.length ? and(...conditions) : undefined;
 
-    toCallback(
-      this.db.select({ total: count() }).from(ticket).where(where),
-      (err, totals) => {
-        if (err || !totals) return this.fail(res, err);
+    this.isFinal((err, final) => {
+      if (err || final === null) return this.fail(res, err);
+      if (type !== 'TOTAL' && !final) {
+        return Utils.response(res, HttpStatus.OK, true, null, null, {
+          type,
+          year: year ?? null,
+          page,
+          limit,
+          data: [],
+        });
+      }
 
-        const total = totals[0].total;
+      toCallback(
+        this.db.select({ total: count() }).from(ticket).where(where),
+        (err, totals) => {
+          if (err || !totals) return this.fail(res, err);
 
-        toCallback(
-          this.db
-            .select()
-            .from(ticket)
-            .where(where)
-            .orderBy(desc(dateCol), ticket.id)
-            .limit(limit)
-            .offset((page - 1) * limit),
-          (err2, rows) => {
-            if (err2 || !rows) return this.fail(res, err2);
+          const total = totals[0].total;
 
-            return Utils.response(res, HttpStatus.OK, true, null, null, {
-              type,
-              year: year ?? null,
-              page,
-              limit,
-              total,
-              totalPages: Math.ceil(total / limit),
-              data: rows.map((r) => ({
-                ...r,
-                scannedAt: toIso(r.scannedAt),
-              })),
-            });
-          },
-        );
-      },
-    );
+          toCallback(
+            this.db
+              .select()
+              .from(ticket)
+              .where(where)
+              .orderBy(desc(dateCol), ticket.id)
+              .limit(limit)
+              .offset((page - 1) * limit),
+            (err2, rows) => {
+              if (err2 || !rows) return this.fail(res, err2);
+
+              return Utils.response(res, HttpStatus.OK, true, null, null, {
+                type,
+                year: year ?? null,
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+                data: rows.map((r) => ({
+                  ...r,
+                  scannedAt: toIso(r.scannedAt),
+                })),
+              });
+            },
+          );
+        },
+      );
+    });
   }
 
   searchTickets(

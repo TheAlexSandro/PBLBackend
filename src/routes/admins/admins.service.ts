@@ -35,23 +35,38 @@ export class AdminService {
   makeFinal(res: Response) {
     toCallback(
       this.db
-        .insert(config)
-        .values({ id: 'IS_FINAL', value: 'true' })
-        .onConflictDoUpdate({
-          target: config.id,
-          set: { value: 'true' },
-        })
-        .returning({ value: config.value }),
+        .select({ id: config.id, value: config.value })
+        .from(config)
+        .where(eq(config.id, 'IS_FINAL')),
       (err, rows) => {
         if (err || !rows?.length) return this.fail(res, err);
-        return Utils.response(
-          res,
-          HttpStatus.OK,
-          true,
-          'Tiket sudah difinalkan',
-          null,
-          {
-            isFinal: rows[0].value === 'true',
+        const isFinal = String(rows[0].value);
+        const value =
+          isFinal === '-'
+            ? Utils.getThisYear()
+            : `${isFinal},${Utils.getThisYear()}`;
+
+        toCallback(
+          this.db
+            .insert(config)
+            .values({ id: 'IS_FINAL', value })
+            .onConflictDoUpdate({
+              target: config.id,
+              set: { value },
+            })
+            .returning({ value: config.value }),
+          (err, rows) => {
+            if (err || !rows?.length) return this.fail(res, err);
+            return Utils.response(
+              res,
+              HttpStatus.OK,
+              true,
+              'Tiket sudah difinalkan',
+              null,
+              {
+                isFinal: rows[0].value === 'true',
+              },
+            );
           },
         );
       },
@@ -61,12 +76,12 @@ export class AdminService {
   getInfo(res: Response) {
     toCallback(
       this.db
-        .select({ id: config.id, value: config.value })
+        .select({ value: config.value })
         .from(config)
         .where(eq(config.id, 'IS_FINAL')),
       (err, rows) => {
         if (err || !rows?.length) return this.fail(res, err);
-        const isFinal = rows[0].value === 'true' ? true : false;
+        const isFinal = Utils.isFinalYear(rows[0].value, Utils.getThisYear());
         return Utils.response(res, HttpStatus.OK, true, 'Success!', null, {
           isFinal,
         });

@@ -139,7 +139,8 @@ export class TicketsService implements OnApplicationBootstrap {
         .limit(1),
       (err, rows) => {
         if (err || !rows) return cb(err, null);
-        return cb(null, rows[0]?.value === 'true');
+        const isFinal = Utils.isFinalYear(rows[0].value, Utils.getThisYear());
+        return cb(null, isFinal);
       },
     );
   }
@@ -196,20 +197,33 @@ export class TicketsService implements OnApplicationBootstrap {
   }
 
   sync(res: Response): void {
-    this.syncFromSheet(true, (err, r) => {
-      if (err || !r) {
-        this.logger.error(`Gagal sync spreadsheet: ${err}`);
+    this.isFinal((err, final) => {
+      if (err || final === null) return this.fail(res, err);
+      if (final) {
         return Utils.response(
           res,
-          HttpStatus.BAD_GATEWAY,
+          HttpStatus.FORBIDDEN,
           false,
-          'Gagal mengambil data spreadsheet',
-          'BAD_GATEWAY',
+          'Tiket sudah difinalkan, tidak bisa diubah',
+          'FORBIDDEN',
         );
       }
-      return Utils.response(res, HttpStatus.OK, true, null, null, {
-        total: r.total,
-        created: r.created,
+
+      this.syncFromSheet(true, (err, r) => {
+        if (err || !r) {
+          this.logger.error(`Gagal sync spreadsheet: ${err}`);
+          return Utils.response(
+            res,
+            HttpStatus.BAD_GATEWAY,
+            false,
+            'Gagal mengambil data spreadsheet',
+            'BAD_GATEWAY',
+          );
+        }
+        return Utils.response(res, HttpStatus.OK, true, null, null, {
+          total: r.total,
+          created: r.created,
+        });
       });
     });
   }
@@ -380,14 +394,12 @@ export class TicketsService implements OnApplicationBootstrap {
       };
 
       if (!r.final && !r.current.scanned) {
-        return Utils.response(
-          res,
-          HttpStatus.OK,
-          true,
-          'Tiket Valid',
-          null,
-          { status: 'valid', valid: true, final: false, ticket: info },
-        );
+        return Utils.response(res, HttpStatus.OK, true, 'Tiket Valid', null, {
+          status: 'valid',
+          valid: true,
+          final: false,
+          ticket: info,
+        });
       }
 
       if (r.claimed) {

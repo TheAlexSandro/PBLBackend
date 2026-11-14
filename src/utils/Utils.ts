@@ -41,7 +41,7 @@ export class Utils {
     }
 
     return result;
-  }
+  };
 
   static getCookie(
     header: string | undefined,
@@ -56,5 +56,15 @@ export class Utils {
       }
     }
     return undefined;
+  }
+
+  static getThisYear(): string {
+    return String(new Date().getFullYear());
+  }
+
+  static isFinalYear(value: unknown, year: number | string): boolean {
+    return String(value ?? '')
+      .split(',')
+      .some((t) => t.trim() === String(year));
   }
 }

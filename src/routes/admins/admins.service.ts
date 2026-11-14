@@ -200,7 +200,7 @@ export class AdminService {
 
     this.isFinal((err, final) => {
       if (err || final === null) return this.fail(res, err);
-      if ((type !== 'TOTAL' && !final) || (type === 'TOTAL' && final)) {
+      if ((type !== 'TOTAL' && !final)) {
         return Utils.response(res, HttpStatus.OK, true, null, null, {
           type,
           year: year ?? null,

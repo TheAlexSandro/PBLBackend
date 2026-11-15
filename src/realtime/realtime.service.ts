@@ -1,5 +1,4 @@
 import {
-  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -7,6 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { and, count, eq, isNotNull, or, sql } from 'drizzle-orm';
+import type { Client as PgClient } from 'pg';
 import type { Server } from 'socket.io';
 import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
@@ -25,10 +25,20 @@ export type TicketStatsEvent = {
   perYear: { year: number; scanned: number }[];
 };
 
+const RECONNECT_BASE_MS = 3_000;
+const RECONNECT_MAX_MS = 30_000;
+
 @Injectable()
 export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealtimeService.name);
   private server: Server | null = null;
+
+  private listener: PgClient | null = null;
+  private reconnectTimer?: NodeJS.Timeout;
+  private attempts = 0;
+  private destroyed = false;
+  private statsTimer?: NodeJS.Timeout;
+  private statsDirty = false;
 
   constructor(@Inject(DB) private readonly db: Database) {}
 
@@ -110,40 +120,118 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private scheduleStats(): void {
+    if (this.statsTimer) {
+      this.statsDirty = true;
+      return;
+    }
+    void this.broadcastTicketStats();
+    this.statsTimer = setTimeout(() => {
+      this.statsTimer = undefined;
+      if (this.statsDirty) {
+        this.statsDirty = false;
+        this.scheduleStats();
+      }
+    }, 1000);
+  }
+
   async onModuleInit(): Promise<void> {
+    await this.listen();
+  }
+
+  private async listen(): Promise<void> {
     const url = process.env['DATABASE_URL'];
-    if (!url) return;
+    if (!url || this.destroyed) return;
+
+    let client: PgClient;
     try {
-      
       const { Client } = await import('pg');
-      const client = new Client({ connectionString: url });
+      client = new Client({
+        connectionString: url,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10_000,
+      });
+    } catch (e) {
+      this.logger.warn('Gagal memuat driver pg untuk LISTEN:', e);
+      return;
+    }
+
+    let retried = false;
+    const retry = () => {
+      if (retried) return;
+      retried = true;
+      if (this.listener === client) this.listener = null;
+      client.end().catch(() => {});
+      if (this.destroyed) return;
+
+      const delay = Math.min(
+        RECONNECT_BASE_MS * 2 ** this.attempts,
+        RECONNECT_MAX_MS,
+      );
+      this.attempts++;
+      this.logger.warn(`LISTEN terputus, menyambung ulang dalam ${delay}ms`);
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = undefined;
+        void this.listen();
+      }, delay);
+    };
+
+    client.on('error', (e) => {
+      this.logger.warn(`LISTEN error: ${e.message}`);
+      retry();
+    });
+    client.on('end', retry);
+
+    client.on('notification', (msg) => {
+      if (msg.channel === 'ticket_changed') {
+        this.scheduleStats();
+        return;
+      }
+      if (msg.channel === 'config_changed') {
+        const id = msg.payload;
+        if (id === 'SCANNER_STATUS') {
+          void this.getScannerStatus().then((a) => this.emitScannerStatus(a));
+        } else if (id === 'APP_VER') {
+          void this.getAppVersion().then((v) => this.emitAppVersion(v));
+        }
+        return;
+      }
+      if (msg.channel === 'scan_log_changed') {
+        this.emitRefreshLogs();
+      }
+    });
+
+    try {
       await client.connect();
       await client.query('LISTEN config_changed');
       await client.query('LISTEN ticket_changed');
       await client.query('LISTEN scan_log_changed');
-      client.on('notification', (msg) => {
-        if (msg.channel === 'ticket_changed') {
-          void this.broadcastTicketStats();
-          return;
-        }
-        if (msg.channel === 'config_changed') {
-          const id = msg.payload;
-          if (id === 'SCANNER_STATUS') {
-            void this.getScannerStatus().then((a) => this.emitScannerStatus(a));
-          } else if (id === 'APP_VER') {
-            void this.getAppVersion().then((v) => this.emitAppVersion(v));
-          }
-        }
-        if (msg.channel === 'scan_log_changed') {
-          void this.emitRefreshLogs();
-        }
-      });
+
+      if (this.destroyed) {
+        client.end().catch(() => {});
+        return;
+      }
+
+      this.listener = client;
+      const wasReconnect = this.attempts > 0;
+      this.attempts = 0;
+      this.logger.log('LISTEN aktif');
+      if (wasReconnect) {
+        void this.broadcastTicketStats();
+        this.emitRefreshLogs();
+      }
     } catch (e) {
-      this.logger.warn('LISTEN config_changed tidak aktif:', e);
+      this.logger.warn('LISTEN gagal diaktifkan:', e);
+      retry();
     }
   }
 
   onModuleDestroy(): void {
+    this.destroyed = true;
+    if (this.statsTimer) clearTimeout(this.statsTimer);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.listener?.end().catch(() => {});
+    this.listener = null;
     this.server = null;
   }
 }

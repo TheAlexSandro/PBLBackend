@@ -42,13 +42,13 @@ const toIso = (v: Date | string | null): string | null => {
   return `${v.replace(' ', 'T')}Z`;
 };
 
-const thisYear = () => new Date().getFullYear();
-
 @Injectable()
 export class TicketsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(TicketsService.name);
   private lastSync = 0;
   private syncWaiters: Callback<SyncResult>[] | null = null;
+  private allCache: { rows: TicketRow[]; at: number } | null = null;
+  private allLoading: Callback<TicketRow[]>[] | null = null;
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -130,6 +130,33 @@ export class TicketsService implements OnApplicationBootstrap {
     );
   }
 
+  private invalidateTickets(): void {
+    this.allCache = null;
+    this.allLoading = null;
+  }
+
+  private allTickets(cb: Callback<TicketRow[]>): void {
+    const c = this.allCache;
+    if (c && Date.now() - c.at < 30_000) return cb(null, c.rows);
+
+    if (this.allLoading) {
+      this.allLoading.push(cb);
+      return;
+    }
+
+    const waiters: Callback<TicketRow[]>[] = [cb];
+    this.allLoading = waiters;
+    this.logger.log('tickets cache load');
+
+    toCallback(this.db.select(TICKET_COLS).from(ticket), (err, rows) => {
+      if (this.allLoading === waiters) {
+        this.allLoading = null;
+        if (!err && rows) this.allCache = { rows, at: Date.now() };
+      }
+      waiters.forEach((fn) => (err || !rows ? fn(err, null) : fn(null, rows)));
+    });
+  }
+
   private isFinal(cb: Callback<boolean>): void {
     toCallback(
       this.db
@@ -184,6 +211,7 @@ export class TicketsService implements OnApplicationBootstrap {
               'NOT_FOUND',
             );
           }
+          this.invalidateTickets();
           void this.db.execute(sql`select pg_notify('ticket_changed', '')`);
           return Utils.response(
             res,
@@ -256,7 +284,11 @@ export class TicketsService implements OnApplicationBootstrap {
   stats(res: Response, year?: number): void {
     if (year === undefined) return this.statsAll(res);
 
-    if (!Number.isInteger(year) || year < 2026 || year > thisYear()) {
+    if (
+      !Number.isInteger(year) ||
+      year < 2026 ||
+      year > Number(Utils.getThisYear())
+    ) {
       return Utils.response(
         res,
         HttpStatus.BAD_REQUEST,
@@ -442,7 +474,7 @@ export class TicketsService implements OnApplicationBootstrap {
         const q = norm(code);
         if (!q) return cb(null, { kind: 'none' });
 
-        toCallback(this.db.select(TICKET_COLS).from(ticket), (err2, all) => {
+        this.allTickets((err2, all) => {
           if (err2 || !all) return cb(err2, null);
           return cb(null, this.matchByName(q, all));
         });
@@ -573,6 +605,7 @@ export class TicketsService implements OnApplicationBootstrap {
         //@ts-ignore
         this.upsertChunks(rows, 0, (e2) => {
           if (e2) return cb(e2, null);
+          this.invalidateTickets();
 
           this.countTickets((e3, after) => {
             if (e3 || after === null) return cb(e3, null);

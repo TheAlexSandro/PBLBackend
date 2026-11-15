@@ -20,7 +20,7 @@ async function bootstrap() {
   app.enableCors({
     // izinkan semua origin untuk pass, backend dipakai tidak hanya untuk frontend tetapi juga spreadsheet tiket
     origin: '*',
-    // izinkan 2 headers untuk pass
+    // izinkan 3 headers untuk pass
     allowedHeaders: ['Content-Type', 'X-Scanner-Key', 'X-App-Version'],
     // hanya izinkan 2 method untuk pass
     methods: ['GET', 'POST'],
@@ -28,6 +28,7 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use(json({ limit: '5mb' }));
   app.use(urlencoded({ limit: '5mb', extended: true }));
+  app.enableShutdownHooks();
   await app.listen(process.env.PORT ?? 3000);
   console.log('STARTED');
 }

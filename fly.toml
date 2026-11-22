@@ -17,7 +17,7 @@ auto_start_machines = true
 auto_stop_machines = false
 force_https = true
 internal_port = 3000
-min_machines_running = 2
+min_machines_running = 1
   checks = [{ grace_period = '10s', interval = '30s', method = 'GET', path = '/', timeout = '5s' }]
 
 [[restart]]

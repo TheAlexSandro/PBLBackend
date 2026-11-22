@@ -17,13 +17,12 @@ import { DB } from '../database/database.provider';
 import type { Database } from '../database/database.provider';
 import { session } from '../database/drizzle/schema';
 import { and, eq, gt } from 'drizzle-orm';
-import { Utils } from '../utils/Utils';
-
-const allowedOrigins = String(process.env['ALLOWED_ORIGINS']).split(',');
 
 @WebSocketGateway({
-  namespace: '/wss',
-  cors: { origin: allowedOrigins, credentials: true },
+  namespace: 'wss',
+  cors: {
+    origin: (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean),
+  },
 })
 @Injectable()
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {

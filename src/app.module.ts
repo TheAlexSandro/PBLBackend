@@ -10,6 +10,7 @@ import { ConfigsModule } from './routes/configs/configs.module';
 import { AuthModule } from './routes/auth/auth.module';
 import { AdminsModule } from './routes/admins/admins.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { StreamModule } from './stream/stream.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     AuthModule,
     AdminsModule,
     RealtimeModule,
+    StreamModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,4 +1,6 @@
-import { JwtService } from '@nestjs/jwt';
+import { Inject, UnauthorizedException } from '@nestjs/common';
+import { and, eq, gt } from 'drizzle-orm';
+import { timingSafeEqual } from 'crypto';
 import {
   ConnectedSocket,
   MessageBody,
@@ -9,6 +11,9 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Namespace, Socket } from 'socket.io';
+import { DB } from '../database/database.provider';
+import type { Database } from '../database/database.provider';
+import { session } from '../database/drizzle/schema';
 
 type Role = 'scanner' | 'viewer';
 interface Claims {
@@ -31,14 +36,12 @@ const MIN_FRAME_GAP_MS = 30;
 export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Namespace;
 
-  constructor(private readonly jwt: JwtService) {}
+  constructor(@Inject(DB) private readonly db: Database) {}
 
   async handleConnection(client: Socket) {
     try {
-      const { role, room } = this.jwt.verify<Claims>(
-        client.handshake.auth?.token,
-        { algorithms: ['HS256'] },
-      );
+      const { role, room } = await this.authenticate(client);
+      if (!client.connected) return;
 
       if (role === 'scanner') {
         if (!DEVICE_ID.test(room)) throw new Error('room');
@@ -72,6 +75,54 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } catch {
       client.disconnect(true);
     }
+  }
+
+  private async authenticate(client: Socket): Promise<Claims> {
+    const auth = client.handshake.auth ?? {};
+
+    if (auth['scannerKey']) {
+      this.assertKey(auth['scannerKey']);
+      return { role: 'scanner', room: String(auth['deviceId'] ?? '') };
+    }
+
+    if (auth['wsToken']) {
+      await this.verifyWsToken(auth['wsToken']);
+      return { role: 'viewer', room: '*' };
+    }
+
+    this.reject();
+  }
+
+  private assertKey(key: unknown): void {
+    const expected = process.env['SCANNER_KEY'] ?? '';
+    if (typeof key !== 'string') this.reject();
+    const a = Buffer.from(key);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) this.reject();
+  }
+
+  private async verifyWsToken(wsToken: unknown): Promise<void> {
+    if (typeof wsToken !== 'string') this.reject();
+    const rows = await this.db
+      .select({ id: session.id })
+      .from(session)
+      .where(
+        and(
+          eq(session.id, wsToken),
+          gt(session.expiredAt, new Date().toISOString()),
+          eq(session.key, String(process.env['COOKIE_WS'])),
+        ),
+      )
+      .limit(1);
+    if (!rows.length) this.reject();
+  }
+
+  private reject(): never {
+    throw new UnauthorizedException({
+      status: false,
+      message: 'Unauthorized',
+      code: 'UNAUTHORIZED',
+    });
   }
 
   async handleDisconnect(client: Socket) {

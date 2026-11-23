@@ -19,7 +19,7 @@ import { session } from '../database/drizzle/schema';
 import { and, eq, gt } from 'drizzle-orm';
 
 @WebSocketGateway({
-  namespace: 'wss',
+  namespace: 'stats',
   cors: {
     origin: (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean),
   },
@@ -42,7 +42,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
 
   async handleConnection(client: Socket): Promise<void> {
     try {
-      await this.handshake(client);
+      await this.authenticate(client);
       const [active, version, stats] = await Promise.all([
         this.realtime.getScannerStatus(),
         this.realtime.getAppVersion(),
@@ -61,7 +61,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     }
   }
 
-  private async handshake(client: Socket): Promise<void> {
+  private async authenticate(client: Socket): Promise<void> {
     const auth = client.handshake.auth ?? {};
 
     if (auth['scannerKey']) {

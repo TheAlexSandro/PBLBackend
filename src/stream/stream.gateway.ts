@@ -22,7 +22,6 @@ interface Claims {
 }
 
 const DEVICE_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const MAX_VIEWERS = 3;
 const MAX_FRAME_BYTES = 150_000;
 const MIN_FRAME_GAP_MS = 30;
 
@@ -195,11 +194,6 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (watching.has(deviceId)) return;
 
     const viewers = await this.server.in(`${deviceId}:viewer`).fetchSockets();
-    if (viewers.length >= MAX_VIEWERS) {
-      client.emit('watch-error', { deviceId, reason: 'penuh' });
-      return;
-    }
-
     client.join(`${deviceId}:viewer`);
     watching.add(deviceId);
     this.server
